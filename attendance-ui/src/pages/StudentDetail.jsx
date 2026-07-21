@@ -16,10 +16,90 @@ function Field({ k, v }) {
   )
 }
 
+// Signal code -> human label + badge variant. 'at_risk' is the headline flag.
+const SIGNALS = {
+  at_risk: { label: 'At risk', bg: 'danger' },
+  attendance_low: { label: 'Low attendance', bg: 'warning' },
+  attendance_declining: { label: 'Attendance declining', bg: 'warning' },
+  missing_assignments: { label: 'Missing assignments', bg: 'warning' },
+  quiz_avg_below_60: { label: 'Low quiz average', bg: 'warning' },
+}
+
+function SignalBadges({ signals }) {
+  if (!signals?.length) return <Badge bg="success">On track</Badge>
+  // headline flag first, then the rest
+  const ordered = [...signals].sort((a) => (a === 'at_risk' ? -1 : 0))
+  return (
+    <div className="d-flex flex-wrap gap-2">
+      {ordered.map((s) => {
+        const m = SIGNALS[s] || { label: s, bg: 'secondary' }
+        return <Badge key={s} bg={m.bg} text={m.bg === 'warning' ? 'dark' : undefined}>{m.label}</Badge>
+      })}
+    </div>
+  )
+}
+
+function Metric({ label, value, sub }) {
+  return (
+    <div className="me-4 mb-2">
+      <div className="fs-2 text-secondary">{label}</div>
+      <div className="fw-bold text-primary" style={{ fontSize: '1.4rem' }}>{value}</div>
+      {sub && <div className="fs-2 text-secondary">{sub}</div>}
+    </div>
+  )
+}
+
+function StudentSuccess({ prof }) {
+  if (!prof) return null
+  const { attendance: a, academics: ac, signals } = prof
+  const pct = (v) => (v == null ? '—' : `${v}%`)
+  const num = (v) => (v == null ? '—' : v)
+  const cats = Object.entries(ac.byCategory || {})
+  return (
+    <Card className="mb-4">
+      <Card.Header className="d-flex justify-content-between align-items-center">
+        <span>Student success</span>
+        <SignalBadges signals={signals} />
+      </Card.Header>
+      <Card.Body>
+        <div className="d-flex flex-wrap">
+          <Metric label="Attendance" value={pct(a.rate)}
+            sub={`${a.present} present · ${a.late} late · ${a.absent} absent`} />
+          <Metric label="Attendance trend"
+            value={a.recentRate == null ? '—' : pct(a.recentRate)}
+            sub={a.priorRate == null ? 'not enough data' : `was ${pct(a.priorRate)}`} />
+          <Metric label="Quiz average" value={pct(ac.quizAvg)} />
+          <Metric label="Missing" value={num(ac.missing)} sub={`${ac.submitted} submitted`} />
+        </div>
+        {cats.length > 0 && (
+          <table className="table table-sm mt-2 mb-0" style={{ maxWidth: 480 }}>
+            <thead>
+              <tr className="text-secondary fs-2">
+                <th>Category</th><th>Avg</th><th>Graded</th><th>Missing</th>
+              </tr>
+            </thead>
+            <tbody>
+              {cats.map(([cat, c]) => (
+                <tr key={cat}>
+                  <td>{cat}</td>
+                  <td>{c.avg == null ? '—' : `${c.avg}%`}</td>
+                  <td>{c.graded}/{c.count}</td>
+                  <td>{c.missing || 0}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </Card.Body>
+    </Card>
+  )
+}
+
 export default function StudentDetail() {
   const { sid } = useParams()
   const nav = useNavigate()
   const [s, setS] = useState(null)
+  const [prof, setProf] = useState(null)
   const [busy, setBusy] = useState(false)
   const [camOn, setCamOn] = useState(false)
   const [toast, setToast] = useToast()
@@ -28,6 +108,10 @@ export default function StudentDetail() {
 
   const load = () => api.student(sid).then(setS)
   useEffect(() => { load() }, [sid])
+  useEffect(() => {
+    setProf(null)
+    api.studentProfileFull(sid).then(setProf).catch(() => setProf(null))
+  }, [sid])
 
   async function enrollWith(blobOrFile, name) {
     setBusy(true)
@@ -70,6 +154,9 @@ export default function StudentDetail() {
           </div>
         </div>
       </div>
+
+      {/* student-success profile */}
+      <StudentSuccess prof={prof} />
 
       {/* face profile card */}
       <Card>

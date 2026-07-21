@@ -1,8 +1,14 @@
 // Thin client for the Python face-service. In dev, Vite proxies /api -> :8000.
+import { getSession } from './auth'
+
 const BASE = import.meta.env.VITE_API_BASE || ''
 
-async function j(url, opts) {
-  const r = await fetch(BASE + url, opts)
+async function j(url, opts = {}) {
+  // Attach the session token so scoped endpoints can authorize the caller.
+  const token = getSession()?.token
+  const headers = { ...(opts.headers || {}) }
+  if (token) headers.Authorization = `Bearer ${token}`
+  const r = await fetch(BASE + url, { ...opts, headers })
   if (!r.ok) {
     let msg = `HTTP ${r.status}`
     try { const e = await r.json(); msg = e.detail || e.message || msg } catch {}
@@ -26,6 +32,8 @@ export const api = {
   student: async (sid) => (await j('/api/students')).find((s) => s.sid === sid) || null,
   studentProfile: (sid) => j(`/api/students/${sid}/profile`),
   studentStats: (sid) => j(`/api/students/${sid}/stats`),
+  studentProfileFull: (sid) => j(`/api/students/${sid}/profile/full`),
+  cohort: (cls) => j(`/api/analytics/cohort?cls=${encodeURIComponent(cls)}`),
   enroll: (sid, fileOrBlob, name = 'photo.jpg') => {
     const fd = new FormData()
     fd.append('file', fileOrBlob, name)
@@ -54,6 +62,12 @@ export const api = {
   },
   deleteAttendance: (id) => j(`/api/attendance/${id}`, { method: 'DELETE' }),
   summary: (date) => j('/api/attendance/summary' + (date ? `?date=${date}` : '')),
+  roster: (params = {}) => {
+    const q = new URLSearchParams(
+      Object.fromEntries(Object.entries(params).filter(([, v]) => v))
+    ).toString()
+    return j('/api/attendance/roster' + (q ? `?${q}` : ''))
+  },
 }
 
 export const todayStr = () => new Date().toLocaleDateString('en-CA')

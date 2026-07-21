@@ -7,6 +7,7 @@ import Students from './pages/Students'
 import StudentDetail from './pages/StudentDetail'
 import TakeAttendance from './pages/TakeAttendance'
 import Records from './pages/Records'
+import Insights from './pages/Insights'
 import SelectInstitution from './pages/SelectInstitution'
 import Login from './pages/Login'
 import { isLoggedIn } from './auth'
@@ -28,6 +29,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
           <Route path="students/:sid" element={<StudentDetail />} />
           <Route path="attendance" element={<TakeAttendance />} />
           <Route path="records" element={<Records />} />
+          <Route path="insights" element={<Insights />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
