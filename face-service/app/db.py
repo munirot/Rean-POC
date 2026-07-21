@@ -43,6 +43,8 @@ class Store:
         self.subjects = db[settings.subjects_coll]
         self.logins = db[settings.logins_coll]
         self.institutes = db[settings.institutes_coll]
+        self.assignments = db[settings.assignments_coll]
+        self.staffs = db[settings.staffs_coll]
         self._indexed = False
 
     def ping(self):
@@ -71,6 +73,46 @@ class Store:
         if login.get("Student"):
             user["sid"] = login["Student"][0].get("ProfileId")
         return user
+
+    # -- authorization scope -------------------------------------------------
+    def get_login(self, login_id):
+        return self.logins.find_one({"LoginID": login_id})
+
+    def _staff_courses(self, staff_id):
+        """Set of CrIDs a staff member teaches (via their subjects)."""
+        st = self.staffs.find_one({"StaffID": staff_id}) or {}
+        sub_ids = [e.get("SubID") for e in st.get("SubE", []) if e.get("SubID")]
+        if not sub_ids:
+            return set()
+        crs = self.subjects.find({"SubID": {"$in": sub_ids}}, {"_id": 0, "CrID": 1})
+        return {c.get("CrID") for c in crs if c.get("CrID")}
+
+    def user_scope(self, login):
+        """Resolve a login doc into the data it is allowed to see.
+        courses=None means 'no course-level restriction' (admin); a set means
+        the staff member is limited to those CrIDs; students are limited to sid."""
+        if not login:
+            return None
+        t = login.get("Type")
+        scope = {"InId": login.get("InId"), "type": t,
+                 "loginId": login.get("LoginID"), "staffId": login.get("StaffID"),
+                 "sid": None, "courses": None}
+        if t == "student" and login.get("Student"):
+            scope["sid"] = login["Student"][0].get("ProfileId")
+        if t == "staff" and login.get("StaffID"):
+            scope["courses"] = self._staff_courses(login["StaffID"])
+        return scope
+
+    @staticmethod
+    def can_view_student(scope, raw):
+        """Whether a scope may read a given student document."""
+        if not scope or raw.get("InId") != scope.get("InId"):
+            return False
+        if scope["type"] == "student":
+            return _student_sid(raw) == scope.get("sid")
+        if scope["type"] == "staff" and scope.get("courses") is not None:
+            return raw.get("CurCrID") in scope["courses"]
+        return True  # admin
 
     def ensure_index(self):
         if not self._indexed:
@@ -130,6 +172,139 @@ class Store:
         absent = sum(1 for r in recs if r.get("status") == "A")
         return {"records": total, "present": present, "late": late, "absent": absent,
                 "rate": round(present / total * 100, 1) if total else 0.0}
+
+    # ======================================================================= #
+    # Student-success aggregation (attendance + assignments)
+    # Pure reducers are staticmethods so they're unit-testable without Mongo.
+    # ======================================================================= #
+    @staticmethod
+    def _reduce_attendance(records):
+        """records: list of {status: P/L/A, date: 'YYYY-MM-DD'}.
+        Present-rate counts 'P' (Late is tracked separately, not as present).
+        Splits chronologically into prior/recent halves to detect a decline."""
+        recs = [r for r in records if r.get("status") in ("P", "L", "A")]
+        total = len(recs)
+        present = sum(1 for r in recs if r.get("status") == "P")
+        late = sum(1 for r in recs if r.get("status") == "L")
+        absent = sum(1 for r in recs if r.get("status") == "A")
+        rate = round(present / total * 100, 1) if total else 0.0
+
+        def _rate(rows):
+            n = len(rows)
+            return round(sum(1 for r in rows if r.get("status") == "P") / n * 100, 1) if n else None
+
+        recent_rate = prior_rate = None
+        if total >= 4:
+            ordered = sorted(recs, key=lambda r: r.get("date") or "")
+            mid = total // 2
+            prior_rate = _rate(ordered[:mid])
+            recent_rate = _rate(ordered[mid:])
+        return {"records": total, "present": present, "late": late, "absent": absent,
+                "rate": rate, "priorRate": prior_rate, "recentRate": recent_rate}
+
+    @staticmethod
+    def _reduce_academics(assignment_docs, sid, today=None):
+        """assignment_docs: list of assignment docs (with Catry, assgnDueDt and a
+        Students[] array of {StuID, status, marks}). Reduces to per-category and
+        overall figures for one student. 'missing' = assigned, past due, not
+        submitted/graded."""
+        today = today or datetime.now().strftime("%Y-%m-%d")
+        by_cat = {}
+        submitted = graded = missing = 0
+        for a in assignment_docs:
+            entry = next((e for e in a.get("Students", []) if e.get("StuID") == sid), None)
+            if entry is None:
+                continue
+            cat = a.get("Catry") or "Other"
+            c = by_cat.setdefault(cat, {"count": 0, "graded": 0, "missing": 0, "_sum": 0.0})
+            c["count"] += 1
+            status = entry.get("status")
+            marks = entry.get("marks")
+            if status in ("submitted", "graded"):
+                submitted += 1
+            if status == "graded" and marks is not None:
+                graded += 1
+                c["graded"] += 1
+                c["_sum"] += float(marks)
+            is_missing = status == "assigned" and (a.get("assgnDueDt") or "") < today
+            if is_missing:
+                missing += 1
+                c["missing"] += 1
+
+        by_category = {}
+        for cat, c in by_cat.items():
+            by_category[cat] = {
+                "count": c["count"], "graded": c["graded"], "missing": c["missing"],
+                "avg": round(c["_sum"] / c["graded"], 1) if c["graded"] else None,
+            }
+
+        def _avg(cat):
+            return by_category.get(cat, {}).get("avg")
+
+        return {"quizAvg": _avg("Quiz"), "homeworkAvg": _avg("Homework"),
+                "projectAvg": _avg("Project"), "submitted": submitted,
+                "graded": graded, "missing": missing, "byCategory": by_category}
+
+    @staticmethod
+    def _signals(att, acad):
+        """Threshold rules over the two blocks. Auditable, no ML."""
+        s = settings
+        sig = []
+        if att.get("records") and att.get("rate", 100) < s.attn_low_rate:
+            sig.append("attendance_low")
+        pr, rr = att.get("priorRate"), att.get("recentRate")
+        declining = pr is not None and rr is not None and (pr - rr) >= s.attn_decline_pts
+        if declining:
+            sig.append("attendance_declining")
+        if acad.get("missing", 0) >= s.missing_assign_min:
+            sig.append("missing_assignments")
+        quiz = acad.get("quizAvg")
+        quiz_low = quiz is not None and quiz < s.quiz_low_avg
+        if quiz_low:
+            sig.append("quiz_avg_below_60")
+        if declining and (quiz_low or acad.get("missing", 0) >= s.missing_assign_min):
+            sig.append("at_risk")
+        return sig
+
+    def _academics(self, sid):
+        docs = list(self.assignments.find({"Students.StuID": sid}))
+        return self._reduce_academics(docs, sid)
+
+    def student_profile(self, sid):
+        rec = self.get(sid)
+        if not rec:
+            return None
+        raw = rec["raw"]
+        att_recs = list(self.attn.find({"StuID": sid}, {"_id": 0, "status": 1, "date": 1}))
+        att = self._reduce_attendance(att_recs)
+        acad = self._academics(sid)
+        return {"sid": sid, "name": rec["name"], "cls": rec["cls"],
+                "InId": raw.get("InId"), "CrID": raw.get("CurCrID"),
+                "attendance": att, "academics": acad,
+                "signals": self._signals(att, acad)}
+
+    def cohort_signals(self, cls, scope=None):
+        """Every student in a class label + their signals, flagged first.
+        When scope is given, students outside it are excluded."""
+        out = []
+        for s in self.students.find({"StFl": {"$ne": "I"}}):
+            if _student_class(s) != cls:
+                continue
+            if scope and not self.can_view_student(scope, s):
+                continue
+            sid = _student_sid(s)
+            prof = self.student_profile(sid)
+            if not prof:
+                continue
+            out.append({"sid": sid, "name": prof["name"], "cls": prof["cls"],
+                        "rate": prof["attendance"]["rate"],
+                        "quizAvg": prof["academics"]["quizAvg"],
+                        "missing": prof["academics"]["missing"],
+                        "signals": prof["signals"]})
+        out.sort(key=lambda x: (len(x["signals"]) == 0, "at_risk" not in x["signals"],
+                                x["rate"]))
+        return {"cls": cls, "total": len(out),
+                "flagged": sum(1 for x in out if x["signals"]), "students": out}
 
     def get(self, sid: str):
         s = self.students.find_one({"$or": [{"StuID": sid}, {"CmStudID": sid}]}, {"_id": 0})
@@ -248,6 +423,42 @@ class Store:
         sids = self.students.find({"$or": [{"CurCrNm": cls}, {"CurCrCd": cls}]},
                                   {"_id": 0, "CurCrID": 1})
         return sorted({s.get("CurCrID") for s in sids if s.get("CurCrID")})
+
+    def attendance_roster(self, date=None, cls=None, session=None):
+        """For a date, every student + whether they've registered attendance yet.
+        checkedIn = has a Present/Late record; else 'not yet'."""
+        date = date or self._today()
+        q = {"date": date}
+        if session:
+            q["session"] = session
+        recs = {}
+        for r in self.attn.find(q):
+            # prefer a present/late record if a student has multiple sessions
+            prev = recs.get(r["StuID"])
+            if prev is None or (r.get("status") in ("P", "L") and prev.get("status") == "A"):
+                recs[r["StuID"]] = r
+        out = []
+        for s in self.students.find({"StFl": {"$ne": "I"}}):
+            sid = _student_sid(s)
+            cls_name = _student_class(s)
+            if cls and cls_name != cls:
+                continue
+            r = recs.get(sid)
+            status = r.get("status") if r else None
+            ts = r.get("CrAt") if r else None
+            out.append({
+                "sid": sid, "name": _full_name(s), "cls": cls_name,
+                "checkedIn": bool(r) and status in ("P", "L"),
+                "status": {"P": "present", "L": "late", "A": "absent"}.get(status, "none"),
+                "session": (r.get("session") if r else session),
+                "source": r.get("source") if r else None,
+                "time": ts.isoformat() if isinstance(ts, datetime) else ts,
+            })
+        out.sort(key=lambda x: str(x["sid"]))
+        checked = sum(1 for x in out if x["checkedIn"])
+        return {"date": date, "students": out, "checked_in": checked,
+                "not_yet": len(out) - checked, "total": len(out),
+                "sessions": sorted(x for x in self.attn.distinct("session", {"date": date}) if x)}
 
     def delete_attendance(self, record_id):
         try:

@@ -21,13 +21,14 @@ import os
 from typing import Optional
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Header, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from .config import settings
 from .db import get_store
 from . import engine as eng
+from . import antispoof as anti
 import base64
 from .schemas import (Health, Student, EnrollResult, RecognizeResult,
                       MarkRequest, MarkResult, AttendanceRecord, AttendanceSummary,
@@ -54,6 +55,15 @@ async def lifespan(app: FastAPI):
               f"(device={settings.device}, det_size={settings.det_size})")
     except Exception as e:  # pragma: no cover
         print(f"[startup] WARNING: face model failed to load: {e}")
+    if settings.antispoof_enabled:
+        try:
+            a = anti.get_antispoof()
+            print(f"[startup] Anti-spoofing ready (backend={a.backend}, "
+                  f"threshold={settings.liveness_threshold})")
+        except Exception as e:  # pragma: no cover
+            print(f"[startup] WARNING: anti-spoofing failed to load: {e}")
+    else:
+        print("[startup] Anti-spoofing DISABLED (ANTISPOOF_ENABLED=false)")
     yield
 
 
@@ -117,6 +127,40 @@ def get_student_stats(sid: str):
     return get_store().student_stats(sid)
 
 
+def current_user(authorization: Optional[str] = Header(None)) -> dict:
+    """Decode the session token (base64 'loginId:type'), load the login, and
+    return the authorization scope used to filter data. Raises 401 if invalid."""
+    if not authorization:
+        raise HTTPException(401, "Missing Authorization header")
+    token = authorization.split(" ", 1)[1] if " " in authorization else authorization
+    try:
+        login_id = base64.urlsafe_b64decode(token.encode()).decode().split(":", 1)[0]
+    except Exception:
+        raise HTTPException(401, "Invalid session token")
+    scope = get_store().user_scope(get_store().get_login(login_id))
+    if not scope:
+        raise HTTPException(401, "Unknown session")
+    return scope
+
+
+@app.get("/api/students/{sid}/profile/full")
+def get_student_profile_full(sid: str, user: dict = Depends(current_user)):
+    """Unified student-success profile: attendance + academics + signals."""
+    rec = get_store().get(sid)
+    if not rec:
+        raise HTTPException(404, f"Unknown student {sid}")
+    if not get_store().can_view_student(user, rec["raw"]):
+        raise HTTPException(403, "Not permitted to view this student")
+    return get_store().student_profile(sid)
+
+
+@app.get("/api/analytics/cohort")
+def get_cohort_signals(cls: str, user: dict = Depends(current_user)):
+    """Every student in a class label + their at-risk signals (flagged first).
+    Scoped to what the caller is allowed to see."""
+    return get_store().cohort_signals(cls, scope=user)
+
+
 @app.post("/api/students/seed")
 def seed(force: bool = False):
     get_store().seed(force=force)
@@ -144,12 +188,23 @@ async def enroll(sid: str, file: UploadFile = File(...)):
                             faces_found=0, embVer=settings.model_pack,
                             message="No face detected — use a clear, front-facing photo.")
     face = faces[0]  # largest
+    # Reject spoofed templates: enrollment uses a stricter liveness cutoff since a
+    # template is stored once and quality matters most.
+    live = _liveness(img, face, settings.enroll_liveness_threshold)
+    if live is not None and not live["live"]:
+        return EnrollResult(ok=False, sid=sid, name=student["name"], quality=0.0,
+                            faces_found=len(faces), embVer=settings.model_pack,
+                            live=False, liveness_score=live["score"],
+                            message="Liveness check failed — enroll from a live face, "
+                                    "not a photo or screen.")
     emb = engine.embedding(face)
     thumb = engine.thumbnail(img, face)
     quality = engine.quality(face)
     store.set_embedding(sid, emb, quality, thumb, settings.model_pack)
     return EnrollResult(ok=True, sid=sid, name=student["name"], quality=quality,
                         faces_found=len(faces), embVer=settings.model_pack, thumb=thumb,
+                        live=(live["live"] if live is not None else None),
+                        liveness_score=(live["score"] if live is not None else None),
                         message=f"Enrolled from largest of {len(faces)} face(s).")
 
 
@@ -161,28 +216,40 @@ def unenroll(sid: str):
 
 
 @app.post("/api/recognize", response_model=RecognizeResult)
-async def recognize(file: UploadFile = File(...), threshold: Optional[float] = Form(None)):
+async def recognize(file: UploadFile = File(...), threshold: Optional[float] = Form(None),
+                    source: Optional[str] = Form(None)):
     store = get_store()
     engine = _engine_or_503()
     img = engine.decode(await file.read())
     h, w = img.shape[:2]
     thr = settings.match_threshold if threshold is None else float(threshold)
+    live_thr = settings.liveness_threshold_for(source)
 
     gallery = store.gallery()
     faces_out = []
     for face in engine.detect(img):
+        # Liveness first — a matched identity is only trusted if the face is live.
+        live = _liveness(img, face, live_thr)
         emb = engine.embedding(face)
         m = eng.best_match(emb, gallery, thr)
+        id_ok = m.get("recognized", False)
+        # Combined gate: accept only when identity matches AND liveness passes.
+        recognized = id_ok and (live["live"] if live is not None else True)
+        reason = m.get("reason")
+        if live is not None and id_ok and not live["live"]:
+            reason = "spoof_suspected"   # matched a real student, but presented a photo
         faces_out.append({
             "bbox": engine.bbox(face),
             "quality": engine.quality(face),
-            "recognized": m.get("recognized", False),
+            "recognized": recognized,
             "sid": m.get("sid"),
             "name": m.get("name"),
             "cls": m.get("cls"),
             "similarity": m.get("similarity", 0.0),
             "accuracy": m.get("accuracy", 0.0),
-            "reason": m.get("reason"),
+            "reason": reason,
+            "live": (live["live"] if live is not None else None),
+            "liveness_score": (live["score"] if live is not None else None),
         })
     return RecognizeResult(image_w=w, image_h=h, threshold=thr, faces=faces_out)
 
@@ -217,11 +284,31 @@ def attendance_summary(date: Optional[str] = None):
     return get_store().attendance_summary(date=date)
 
 
+@app.get("/api/attendance/roster")
+def attendance_roster(date: Optional[str] = None, cls: Optional[str] = None,
+                      session: Optional[str] = None):
+    return get_store().attendance_roster(date=date, cls=cls, session=session)
+
+
 def _engine_or_503():
     try:
         return eng.get_engine()
     except Exception as e:
         raise HTTPException(503, f"Face model unavailable: {e}")
+
+
+def _liveness(img, face, threshold: float):
+    """Score one face for liveness, honoring the enabled flag + fail-open/closed
+    policy. Returns None when anti-spoofing is disabled (so callers skip the gate),
+    else {'live': bool, 'score': float}."""
+    if not settings.antispoof_enabled:
+        return None
+    try:
+        res = anti.get_antispoof().score(img, face)
+        return {"live": res["score"] >= threshold, "score": res["score"]}
+    except Exception as e:  # model missing/broken at runtime → apply policy
+        print(f"[antispoof] runtime error: {e}")
+        return {"live": not settings.antispoof_fail_closed, "score": 0.0}
 
 
 # ---- static frontend (mounted last so /api/* wins) -------------------------
