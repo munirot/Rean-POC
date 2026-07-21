@@ -1,0 +1,602 @@
+[
+  {
+    "LoginID": "LG-ADMIN",
+    "InId": "IN001",
+    "Name": "System Administrator",
+    "Email": "admin@rule.edu.kh",
+    "Type": "admin",
+    "CamuPin": "PIN702733",
+    "pwd": "sha256$6cccf588da51943bc2a81ef261788b0fa402dcfb8c87b826ae8447bb16391c18",
+    "isvrfd": "Y",
+    "StFl": "A",
+    "CrAt": "2026-07-13 00:00:00+00:00"
+  },
+  {
+    "LoginID": "LG-S001",
+    "InId": "IN001",
+    "Name": "Dara Sok",
+    "Email": "dara.sok@rule.edu.kh",
+    "Type": "staff",
+    "CamuPin": "PIN877572",
+    "pwd": "sha256$6cccf588da51943bc2a81ef261788b0fa402dcfb8c87b826ae8447bb16391c18",
+    "isvrfd": "Y",
+    "StFl": "A",
+    "CrAt": "2026-07-13 00:00:00+00:00",
+    "StaffID": "ST001"
+  },
+  {
+    "LoginID": "LG-S002",
+    "InId": "IN001",
+    "Name": "Sophal Chan",
+    "Email": "sophal.chan@rule.edu.kh",
+    "Type": "staff",
+    "CamuPin": "PIN246316",
+    "pwd": "sha256$6cccf588da51943bc2a81ef261788b0fa402dcfb8c87b826ae8447bb16391c18",
+    "isvrfd": "Y",
+    "StFl": "A",
+    "CrAt": "2026-07-13 00:00:00+00:00",
+    "StaffID": "ST002"
+  },
+  {
+    "LoginID": "LG-S003",
+    "InId": "IN001",
+    "Name": "Vichea Meas",
+    "Email": "vichea.meas@rule.edu.kh",
+    "Type": "staff",
+    "CamuPin": "PIN671858",
+    "pwd": "sha256$6cccf588da51943bc2a81ef261788b0fa402dcfb8c87b826ae8447bb16391c18",
+    "isvrfd": "Y",
+    "StFl": "A",
+    "CrAt": "2026-07-13 00:00:00+00:00",
+    "StaffID": "ST003"
+  },
+  {
+    "LoginID": "LG-S004",
+    "InId": "IN001",
+    "Name": "Rithy Ngo",
+    "Email": "rithy.ngo@rule.edu.kh",
+    "Type": "staff",
+    "CamuPin": "PIN133326",
+    "pwd": "sha256$6cccf588da51943bc2a81ef261788b0fa402dcfb8c87b826ae8447bb16391c18",
+    "isvrfd": "Y",
+    "StFl": "A",
+    "CrAt": "2026-07-13 00:00:00+00:00",
+    "StaffID": "ST004"
+  },
+  {
+    "LoginID": "LG-S005",
+    "InId": "IN001",
+    "Name": "Bunly Voun",
+    "Email": "bunly.voun@rule.edu.kh",
+    "Type": "staff",
+    "CamuPin": "PIN343962",
+    "pwd": "sha256$6cccf588da51943bc2a81ef261788b0fa402dcfb8c87b826ae8447bb16391c18",
+    "isvrfd": "Y",
+    "StFl": "A",
+    "CrAt": "2026-07-13 00:00:00+00:00",
+    "StaffID": "ST005"
+  },
+  {
+    "LoginID": "LG-S006",
+    "InId": "IN001",
+    "Name": "Sovann Pich",
+    "Email": "sovann.pich@rule.edu.kh",
+    "Type": "staff",
+    "CamuPin": "PIN688508",
+    "pwd": "sha256$6cccf588da51943bc2a81ef261788b0fa402dcfb8c87b826ae8447bb16391c18",
+    "isvrfd": "Y",
+    "StFl": "A",
+    "CrAt": "2026-07-13 00:00:00+00:00",
+    "StaffID": "ST006"
+  },
+  {
+    "LoginID": "LG-2301",
+    "InId": "IN001",
+    "Name": "Chantha Sao",
+    "Email": "chantha.sao0@student.rule.edu.kh",
+    "Type": "student",
+    "CamuPin": "PIN717889",
+    "pwd": "sha256$6cccf588da51943bc2a81ef261788b0fa402dcfb8c87b826ae8447bb16391c18",
+    "isvrfd": "Y",
+    "StFl": "A",
+    "CrAt": "2026-07-13 00:00:00+00:00",
+    "Student": [
+      {
+        "ProfileId": "2301"
+      }
+    ]
+  },
+  {
+    "LoginID": "LG-2302",
+    "InId": "IN001",
+    "Name": "Pisey Yem",
+    "Email": "pisey.yem1@student.rule.edu.kh",
+    "Type": "student",
+    "CamuPin": "PIN456778",
+    "pwd": "sha256$6cccf588da51943bc2a81ef261788b0fa402dcfb8c87b826ae8447bb16391c18",
+    "isvrfd": "Y",
+    "StFl": "A",
+    "CrAt": "2026-07-13 00:00:00+00:00",
+    "Student": [
+      {
+        "ProfileId": "2302"
+      }
+    ]
+  },
+  {
+    "LoginID": "LG-2303",
+    "InId": "IN001",
+    "Name": "Leakhena Perm",
+    "Email": "leakhena.perm2@student.rule.edu.kh",
+    "Type": "student",
+    "CamuPin": "PIN498382",
+    "pwd": "sha256$6cccf588da51943bc2a81ef261788b0fa402dcfb8c87b826ae8447bb16391c18",
+    "isvrfd": "Y",
+    "StFl": "A",
+    "CrAt": "2026-07-13 00:00:00+00:00",
+    "Student": [
+      {
+        "ProfileId": "2303"
+      }
+    ]
+  },
+  {
+    "LoginID": "LG-2304",
+    "InId": "IN001",
+    "Name": "Bopha Yem",
+    "Email": "bopha.yem3@student.rule.edu.kh",
+    "Type": "student",
+    "CamuPin": "PIN581741",
+    "pwd": "sha256$6cccf588da51943bc2a81ef261788b0fa402dcfb8c87b826ae8447bb16391c18",
+    "isvrfd": "Y",
+    "StFl": "A",
+    "CrAt": "2026-07-13 00:00:00+00:00",
+    "Student": [
+      {
+        "ProfileId": "2304"
+      }
+    ]
+  },
+  {
+    "LoginID": "LG-2305",
+    "InId": "IN001",
+    "Name": "Sophal Bora",
+    "Email": "sophal.bora4@student.rule.edu.kh",
+    "Type": "student",
+    "CamuPin": "PIN969693",
+    "pwd": "sha256$6cccf588da51943bc2a81ef261788b0fa402dcfb8c87b826ae8447bb16391c18",
+    "isvrfd": "Y",
+    "StFl": "A",
+    "CrAt": "2026-07-13 00:00:00+00:00",
+    "Student": [
+      {
+        "ProfileId": "2305"
+      }
+    ]
+  },
+  {
+    "LoginID": "LG-2306",
+    "InId": "IN001",
+    "Name": "Dara Rith",
+    "Email": "dara.rith5@student.rule.edu.kh",
+    "Type": "student",
+    "CamuPin": "PIN148050",
+    "pwd": "sha256$6cccf588da51943bc2a81ef261788b0fa402dcfb8c87b826ae8447bb16391c18",
+    "isvrfd": "Y",
+    "StFl": "A",
+    "CrAt": "2026-07-13 00:00:00+00:00",
+    "Student": [
+      {
+        "ProfileId": "2306"
+      }
+    ]
+  },
+  {
+    "LoginID": "LG-2307",
+    "InId": "IN001",
+    "Name": "Pheab Ouk",
+    "Email": "pheab.ouk6@student.rule.edu.kh",
+    "Type": "student",
+    "CamuPin": "PIN205907",
+    "pwd": "sha256$6cccf588da51943bc2a81ef261788b0fa402dcfb8c87b826ae8447bb16391c18",
+    "isvrfd": "Y",
+    "StFl": "A",
+    "CrAt": "2026-07-13 00:00:00+00:00",
+    "Student": [
+      {
+        "ProfileId": "2307"
+      }
+    ]
+  },
+  {
+    "LoginID": "LG-2308",
+    "InId": "IN001",
+    "Name": "Nary Chan",
+    "Email": "nary.chan7@student.rule.edu.kh",
+    "Type": "student",
+    "CamuPin": "PIN472528",
+    "pwd": "sha256$6cccf588da51943bc2a81ef261788b0fa402dcfb8c87b826ae8447bb16391c18",
+    "isvrfd": "Y",
+    "StFl": "A",
+    "CrAt": "2026-07-13 00:00:00+00:00",
+    "Student": [
+      {
+        "ProfileId": "2308"
+      }
+    ]
+  },
+  {
+    "LoginID": "LG-2309",
+    "InId": "IN001",
+    "Name": "Chantha Rayuth",
+    "Email": "chantha.rayuth8@student.rule.edu.kh",
+    "Type": "student",
+    "CamuPin": "PIN279451",
+    "pwd": "sha256$6cccf588da51943bc2a81ef261788b0fa402dcfb8c87b826ae8447bb16391c18",
+    "isvrfd": "Y",
+    "StFl": "A",
+    "CrAt": "2026-07-13 00:00:00+00:00",
+    "Student": [
+      {
+        "ProfileId": "2309"
+      }
+    ]
+  },
+  {
+    "LoginID": "LG-2310",
+    "InId": "IN001",
+    "Name": "Vann Chomnan",
+    "Email": "vann.chomnan9@student.rule.edu.kh",
+    "Type": "student",
+    "CamuPin": "PIN771088",
+    "pwd": "sha256$6cccf588da51943bc2a81ef261788b0fa402dcfb8c87b826ae8447bb16391c18",
+    "isvrfd": "Y",
+    "StFl": "A",
+    "CrAt": "2026-07-13 00:00:00+00:00",
+    "Student": [
+      {
+        "ProfileId": "2310"
+      }
+    ]
+  },
+  {
+    "LoginID": "LG-2311",
+    "InId": "IN001",
+    "Name": "Chakra Chomnan",
+    "Email": "chakra.chomnan10@student.rule.edu.kh",
+    "Type": "student",
+    "CamuPin": "PIN133659",
+    "pwd": "sha256$6cccf588da51943bc2a81ef261788b0fa402dcfb8c87b826ae8447bb16391c18",
+    "isvrfd": "Y",
+    "StFl": "A",
+    "CrAt": "2026-07-13 00:00:00+00:00",
+    "Student": [
+      {
+        "ProfileId": "2311"
+      }
+    ]
+  },
+  {
+    "LoginID": "LG-2312",
+    "InId": "IN001",
+    "Name": "Vutha Vuthy",
+    "Email": "vutha.vuthy11@student.rule.edu.kh",
+    "Type": "student",
+    "CamuPin": "PIN852787",
+    "pwd": "sha256$6cccf588da51943bc2a81ef261788b0fa402dcfb8c87b826ae8447bb16391c18",
+    "isvrfd": "Y",
+    "StFl": "A",
+    "CrAt": "2026-07-13 00:00:00+00:00",
+    "Student": [
+      {
+        "ProfileId": "2312"
+      }
+    ]
+  },
+  {
+    "LoginID": "LG-2313",
+    "InId": "IN001",
+    "Name": "Devi Sao",
+    "Email": "devi.sao12@student.rule.edu.kh",
+    "Type": "student",
+    "CamuPin": "PIN249811",
+    "pwd": "sha256$6cccf588da51943bc2a81ef261788b0fa402dcfb8c87b826ae8447bb16391c18",
+    "isvrfd": "Y",
+    "StFl": "A",
+    "CrAt": "2026-07-13 00:00:00+00:00",
+    "Student": [
+      {
+        "ProfileId": "2313"
+      }
+    ]
+  },
+  {
+    "LoginID": "LG-2314",
+    "InId": "IN001",
+    "Name": "Chantha Chomnan",
+    "Email": "chantha.chomnan13@student.rule.edu.kh",
+    "Type": "student",
+    "CamuPin": "PIN549245",
+    "pwd": "sha256$6cccf588da51943bc2a81ef261788b0fa402dcfb8c87b826ae8447bb16391c18",
+    "isvrfd": "Y",
+    "StFl": "A",
+    "CrAt": "2026-07-13 00:00:00+00:00",
+    "Student": [
+      {
+        "ProfileId": "2314"
+      }
+    ]
+  },
+  {
+    "LoginID": "LG-2315",
+    "InId": "IN001",
+    "Name": "Dara Vuthy",
+    "Email": "dara.vuthy14@student.rule.edu.kh",
+    "Type": "student",
+    "CamuPin": "PIN617488",
+    "pwd": "sha256$6cccf588da51943bc2a81ef261788b0fa402dcfb8c87b826ae8447bb16391c18",
+    "isvrfd": "Y",
+    "StFl": "A",
+    "CrAt": "2026-07-13 00:00:00+00:00",
+    "Student": [
+      {
+        "ProfileId": "2315"
+      }
+    ]
+  },
+  {
+    "LoginID": "LG-2316",
+    "InId": "IN001",
+    "Name": "Thida Mao",
+    "Email": "thida.mao15@student.rule.edu.kh",
+    "Type": "student",
+    "CamuPin": "PIN267753",
+    "pwd": "sha256$6cccf588da51943bc2a81ef261788b0fa402dcfb8c87b826ae8447bb16391c18",
+    "isvrfd": "Y",
+    "StFl": "A",
+    "CrAt": "2026-07-13 00:00:00+00:00",
+    "Student": [
+      {
+        "ProfileId": "2316"
+      }
+    ]
+  },
+  {
+    "LoginID": "LG-2317",
+    "InId": "IN001",
+    "Name": "Hean Sok",
+    "Email": "hean.sok16@student.rule.edu.kh",
+    "Type": "student",
+    "CamuPin": "PIN590785",
+    "pwd": "sha256$6cccf588da51943bc2a81ef261788b0fa402dcfb8c87b826ae8447bb16391c18",
+    "isvrfd": "Y",
+    "StFl": "A",
+    "CrAt": "2026-07-13 00:00:00+00:00",
+    "Student": [
+      {
+        "ProfileId": "2317"
+      }
+    ]
+  },
+  {
+    "LoginID": "LG-2318",
+    "InId": "IN001",
+    "Name": "Channa Voun",
+    "Email": "channa.voun17@student.rule.edu.kh",
+    "Type": "student",
+    "CamuPin": "PIN887352",
+    "pwd": "sha256$6cccf588da51943bc2a81ef261788b0fa402dcfb8c87b826ae8447bb16391c18",
+    "isvrfd": "Y",
+    "StFl": "A",
+    "CrAt": "2026-07-13 00:00:00+00:00",
+    "Student": [
+      {
+        "ProfileId": "2318"
+      }
+    ]
+  },
+  {
+    "LoginID": "LG-2319",
+    "InId": "IN001",
+    "Name": "Bopha Sao",
+    "Email": "bopha.sao18@student.rule.edu.kh",
+    "Type": "student",
+    "CamuPin": "PIN265840",
+    "pwd": "sha256$6cccf588da51943bc2a81ef261788b0fa402dcfb8c87b826ae8447bb16391c18",
+    "isvrfd": "Y",
+    "StFl": "A",
+    "CrAt": "2026-07-13 00:00:00+00:00",
+    "Student": [
+      {
+        "ProfileId": "2319"
+      }
+    ]
+  },
+  {
+    "LoginID": "LG-2320",
+    "InId": "IN001",
+    "Name": "Chantha Heng",
+    "Email": "chantha.heng19@student.rule.edu.kh",
+    "Type": "student",
+    "CamuPin": "PIN287330",
+    "pwd": "sha256$6cccf588da51943bc2a81ef261788b0fa402dcfb8c87b826ae8447bb16391c18",
+    "isvrfd": "Y",
+    "StFl": "A",
+    "CrAt": "2026-07-13 00:00:00+00:00",
+    "Student": [
+      {
+        "ProfileId": "2320"
+      }
+    ]
+  },
+  {
+    "LoginID": "LG-2321",
+    "InId": "IN001",
+    "Name": "Pheab Ravy",
+    "Email": "pheab.ravy20@student.rule.edu.kh",
+    "Type": "student",
+    "CamuPin": "PIN899550",
+    "pwd": "sha256$6cccf588da51943bc2a81ef261788b0fa402dcfb8c87b826ae8447bb16391c18",
+    "isvrfd": "Y",
+    "StFl": "A",
+    "CrAt": "2026-07-13 00:00:00+00:00",
+    "Student": [
+      {
+        "ProfileId": "2321"
+      }
+    ]
+  },
+  {
+    "LoginID": "LG-2322",
+    "InId": "IN001",
+    "Name": "Sophea Ouk",
+    "Email": "sophea.ouk21@student.rule.edu.kh",
+    "Type": "student",
+    "CamuPin": "PIN612340",
+    "pwd": "sha256$6cccf588da51943bc2a81ef261788b0fa402dcfb8c87b826ae8447bb16391c18",
+    "isvrfd": "Y",
+    "StFl": "A",
+    "CrAt": "2026-07-13 00:00:00+00:00",
+    "Student": [
+      {
+        "ProfileId": "2322"
+      }
+    ]
+  },
+  {
+    "LoginID": "LG-2323",
+    "InId": "IN001",
+    "Name": "Bopha Bora",
+    "Email": "bopha.bora22@student.rule.edu.kh",
+    "Type": "student",
+    "CamuPin": "PIN352572",
+    "pwd": "sha256$6cccf588da51943bc2a81ef261788b0fa402dcfb8c87b826ae8447bb16391c18",
+    "isvrfd": "Y",
+    "StFl": "A",
+    "CrAt": "2026-07-13 00:00:00+00:00",
+    "Student": [
+      {
+        "ProfileId": "2323"
+      }
+    ]
+  },
+  {
+    "LoginID": "LG-2324",
+    "InId": "IN001",
+    "Name": "Hean Kakada",
+    "Email": "hean.kakada23@student.rule.edu.kh",
+    "Type": "student",
+    "CamuPin": "PIN658582",
+    "pwd": "sha256$6cccf588da51943bc2a81ef261788b0fa402dcfb8c87b826ae8447bb16391c18",
+    "isvrfd": "Y",
+    "StFl": "A",
+    "CrAt": "2026-07-13 00:00:00+00:00",
+    "Student": [
+      {
+        "ProfileId": "2324"
+      }
+    ]
+  },
+  {
+    "LoginID": "LG-2325",
+    "InId": "IN001",
+    "Name": "Bunly Piseth",
+    "Email": "bunly.piseth24@student.rule.edu.kh",
+    "Type": "student",
+    "CamuPin": "PIN736059",
+    "pwd": "sha256$6cccf588da51943bc2a81ef261788b0fa402dcfb8c87b826ae8447bb16391c18",
+    "isvrfd": "Y",
+    "StFl": "A",
+    "CrAt": "2026-07-13 00:00:00+00:00",
+    "Student": [
+      {
+        "ProfileId": "2325"
+      }
+    ]
+  },
+  {
+    "LoginID": "LG-2326",
+    "InId": "IN001",
+    "Name": "Sophea Perm",
+    "Email": "sophea.perm25@student.rule.edu.kh",
+    "Type": "student",
+    "CamuPin": "PIN518373",
+    "pwd": "sha256$6cccf588da51943bc2a81ef261788b0fa402dcfb8c87b826ae8447bb16391c18",
+    "isvrfd": "Y",
+    "StFl": "A",
+    "CrAt": "2026-07-13 00:00:00+00:00",
+    "Student": [
+      {
+        "ProfileId": "2326"
+      }
+    ]
+  },
+  {
+    "LoginID": "LG-2327",
+    "InId": "IN001",
+    "Name": "Dara Sao",
+    "Email": "dara.sao26@student.rule.edu.kh",
+    "Type": "student",
+    "CamuPin": "PIN226882",
+    "pwd": "sha256$6cccf588da51943bc2a81ef261788b0fa402dcfb8c87b826ae8447bb16391c18",
+    "isvrfd": "Y",
+    "StFl": "A",
+    "CrAt": "2026-07-13 00:00:00+00:00",
+    "Student": [
+      {
+        "ProfileId": "2327"
+      }
+    ]
+  },
+  {
+    "LoginID": "LG-2328",
+    "InId": "IN001",
+    "Name": "Bopha Kakada",
+    "Email": "bopha.kakada27@student.rule.edu.kh",
+    "Type": "student",
+    "CamuPin": "PIN341292",
+    "pwd": "sha256$6cccf588da51943bc2a81ef261788b0fa402dcfb8c87b826ae8447bb16391c18",
+    "isvrfd": "Y",
+    "StFl": "A",
+    "CrAt": "2026-07-13 00:00:00+00:00",
+    "Student": [
+      {
+        "ProfileId": "2328"
+      }
+    ]
+  },
+  {
+    "LoginID": "LG-2329",
+    "InId": "IN001",
+    "Name": "Hean Nern",
+    "Email": "hean.nern28@student.rule.edu.kh",
+    "Type": "student",
+    "CamuPin": "PIN132938",
+    "pwd": "sha256$6cccf588da51943bc2a81ef261788b0fa402dcfb8c87b826ae8447bb16391c18",
+    "isvrfd": "Y",
+    "StFl": "A",
+    "CrAt": "2026-07-13 00:00:00+00:00",
+    "Student": [
+      {
+        "ProfileId": "2329"
+      }
+    ]
+  },
+  {
+    "LoginID": "LG-2330",
+    "InId": "IN001",
+    "Name": "Sovann Kakada",
+    "Email": "sovann.kakada29@student.rule.edu.kh",
+    "Type": "student",
+    "CamuPin": "PIN608993",
+    "pwd": "sha256$6cccf588da51943bc2a81ef261788b0fa402dcfb8c87b826ae8447bb16391c18",
+    "isvrfd": "Y",
+    "StFl": "A",
+    "CrAt": "2026-07-13 00:00:00+00:00",
+    "Student": [
+      {
+        "ProfileId": "2330"
+      }
+    ]
+  }
+]

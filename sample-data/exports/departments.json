@@ -1,0 +1,34 @@
+[
+  {
+    "DeptID": "DP001",
+    "DeptNa": "Faculty of Public Administration",
+    "DeptCd": "FPA",
+    "InId": "IN001",
+    "PrID": "PR001",
+    "StFl": "A"
+  },
+  {
+    "DeptID": "DP002",
+    "DeptNa": "Faculty of Law",
+    "DeptCd": "FLAW",
+    "InId": "IN001",
+    "PrID": "PR001",
+    "StFl": "A"
+  },
+  {
+    "DeptID": "DP003",
+    "DeptNa": "Faculty of Economics",
+    "DeptCd": "FECO",
+    "InId": "IN001",
+    "PrID": "PR001",
+    "StFl": "A"
+  },
+  {
+    "DeptID": "DP004",
+    "DeptNa": "Faculty of International Relations",
+    "DeptCd": "FIR",
+    "InId": "IN001",
+    "PrID": "PR001",
+    "StFl": "A"
+  }
+]

@@ -1,0 +1,38 @@
+[
+  {
+    "CrID": "CR001",
+    "CrNa": "Bachelor of International Relations",
+    "CrCd": "BIR",
+    "DeptID": "DP004",
+    "InId": "IN001",
+    "PrID": "PR001",
+    "StFl": "A"
+  },
+  {
+    "CrID": "CR002",
+    "CrNa": "Bachelor of Public Administration",
+    "CrCd": "BPA",
+    "DeptID": "DP001",
+    "InId": "IN001",
+    "PrID": "PR001",
+    "StFl": "A"
+  },
+  {
+    "CrID": "CR003",
+    "CrNa": "Bachelor of Law",
+    "CrCd": "LLB",
+    "DeptID": "DP002",
+    "InId": "IN001",
+    "PrID": "PR001",
+    "StFl": "A"
+  },
+  {
+    "CrID": "CR004",
+    "CrNa": "Bachelor of Economics",
+    "CrCd": "BEC",
+    "DeptID": "DP003",
+    "InId": "IN001",
+    "PrID": "PR001",
+    "StFl": "A"
+  }
+]

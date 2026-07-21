@@ -1,0 +1,587 @@
+/* ------------------------------------------------------------------ *
+ * Rean attendance UI — matched to the real mycamu/Rean dashboards.
+ * White sidenav (plain text menu) · gray content + white cards ·
+ * dark-slate striped tables · royal-blue footer + right-rail icons.
+ * ------------------------------------------------------------------ */
+
+/* 1. Bootstrap variable overrides */
+$primary: #091e42; // navy — used for text-primary / headings
+$secondary: #495973;
+$success: #158444;
+$info: #0d9be1;
+$warning: #bf8012;
+$danger: #e21d12;
+$light: #f4f5f7;
+$dark: #212529;
+$enable-important-utilities: false;
+$enable-validation-icons: false;
+
+:root {
+  --font-size-base: 1rem;
+}
+$font-sizes: (
+  1: calc(var(--font-size-base) * 0.75),
+  2: calc(var(--font-size-base) * 0.813),
+  3: calc(var(--font-size-base) * 0.875),
+  4: var(--font-size-base),
+  5: calc(var(--font-size-base) * 1.125),
+  6: calc(var(--font-size-base) * 1.5),
+  7: var(--font-size-base),
+);
+
+@import "bootstrap/scss/bootstrap";
+
+/* 2. Theme tokens (matched to screenshots) */
+:root {
+  --primary: #091e42;
+  --secondary: #495973;
+  --royal: #33449b; // login / footer / primary CTA / right-rail icons
+  --royal-d: #2b3d8f;
+  --main-bg: #f4f5f7;
+  --card-bg: #ffffff;
+  --line: #dfe1e5;
+  --line2: #ebedf0;
+  --sidenav-bg: #ffffff;
+  --sidenav-active-bg: #eef2fb;
+  --sidenav-hover-bg: #f4f5f7;
+  --right-rail-bg: #ffffff;
+  --table-head-bg: #5d6b83; // dark slate header
+  --table-stripe: #eef1f8;
+  --banner-bg: #e8f2fb; // student profile banner
+  --footer-bg: #33449b;
+  --btn-primary-bg: #33449b;
+  --btn-primary-hover-bg: #2b3d8f;
+  --btn-primary-color: #ffffff;
+  --btn-secondary-bg: #ffffff;
+  --btn-secondary-color: #091e42;
+  --btn-secondary-border: #dfe1e5;
+  --shadow-md: 0 4px 10px rgba(31, 41, 55, 0.05);
+}
+
+/* 3. Base */
+body {
+  font-family: "Noto Sans Khmer", system-ui, sans-serif;
+  margin: 0;
+  background: var(--main-bg);
+  color: var(--primary);
+}
+.material-symbols-rounded {
+  font-variation-settings:
+    "FILL" 0,
+    "wght" 400,
+    "GRAD" 0,
+    "opsz" 24;
+  cursor: pointer;
+}
+
+/* 4. Buttons */
+.btn {
+  border-radius: 0.5rem;
+  font-weight: 600;
+  padding: 0.5rem 1rem;
+}
+.btn-sm {
+  padding: 0.25rem 0.75rem;
+}
+.btn-primary {
+  color: #fff;
+  background-color: var(--btn-primary-bg);
+  border: 1px solid var(--btn-primary-bg);
+  &:hover,
+  &:active,
+  &:focus {
+    background-color: var(--btn-primary-hover-bg) !important;
+    border-color: var(--btn-primary-hover-bg) !important;
+    color: #fff !important;
+  }
+}
+.btn-secondary {
+  color: var(--btn-secondary-color);
+  background-color: var(--btn-secondary-bg);
+  border: 1px solid var(--btn-secondary-border);
+  &:hover,
+  &:active,
+  &:focus {
+    background-color: #f4f5f7 !important;
+    color: var(--btn-secondary-color) !important;
+    border-color: var(--btn-secondary-border) !important;
+  }
+}
+.btn-danger {
+  background-color: #fff;
+  color: var(--danger);
+  border: 1px solid var(--line);
+  &:hover {
+    background-color: #fdecea !important;
+    border-color: var(--danger) !important;
+    color: var(--danger) !important;
+  }
+}
+.btn .material-symbols-rounded {
+  font-size: 20px;
+  line-height: 0;
+  position: relative;
+  top: 4px;
+}
+
+/* 5. Three-column shell */
+.camu-main_container {
+  min-height: 100vh;
+  background: var(--main-bg);
+}
+
+/* left rail — white, plain text menu */
+.left-nav_container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 15rem;
+  height: 100vh;
+  background: var(--sidenav-bg);
+  border-right: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  z-index: 10;
+}
+.inst-logo_container {
+  padding: 16px 16px 10px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.inst-logo_view {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+  font-size: 1.15rem;
+  color: var(--primary);
+}
+.inst-logo_view .logo-badge {
+  width: 30px;
+  height: 30px;
+  border-radius: 7px;
+  background: var(--royal);
+  flex: 0 0 auto;
+}
+.inst-logo_view small {
+  display: block;
+  font-size: 0.68rem;
+  font-weight: 400;
+  color: var(--secondary);
+}
+.nav-search {
+  padding: 6px 14px 10px;
+}
+.nav-search input {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 7px 10px;
+  font-size: 0.85rem;
+  background: #fff;
+}
+.side-nav_container {
+  list-style: none;
+  padding: 6px 8px;
+  margin: 0;
+  overflow: auto;
+  flex: 1;
+}
+.side-nav_container li {
+  border-radius: 7px;
+}
+.sub-list_option {
+  color: var(--primary);
+  font-weight: 500;
+  cursor: pointer;
+  border-radius: 7px;
+  padding: 9px 12px;
+  font-size: 0.9rem;
+}
+.sub-list_option:hover {
+  background: var(--sidenav-hover-bg);
+}
+.menu_active .sub-list_option {
+  background: var(--sidenav-active-bg);
+  color: var(--royal);
+  font-weight: 600;
+}
+.side-foot {
+  padding: 10px 14px;
+  font-size: 10.5px;
+  color: var(--secondary);
+  border-top: 1px solid var(--line2);
+  margin-bottom: 40px;
+}
+.side-foot .up {
+  color: var(--success);
+}
+.side-foot .down {
+  color: var(--danger);
+}
+
+/* center content */
+.main-container_block {
+  margin-left: 15rem;
+  margin-right: 4rem;
+  padding: 22px 26px 64px;
+  min-height: 100vh;
+}
+
+/* right icon rail — white with royal rounded-square buttons */
+.right-navbar_container {
+  position: fixed;
+  top: 0;
+  right: 0;
+  height: 100vh;
+  width: 4rem;
+  background: var(--right-rail-bg);
+  border-left: 1px solid var(--line);
+  z-index: 10;
+}
+.nav-more_option {
+  padding: 16px 0;
+}
+.right-nav_list {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+.right-nav_list .side-nav_list {
+  width: 38px;
+  height: 38px;
+  border-radius: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--royal);
+  color: #fff;
+  cursor: pointer;
+}
+.right-nav_list .side-nav_list:hover {
+  background: var(--royal-d);
+}
+.right-nav_list .side-nav_list .material-symbols-rounded {
+  color: #fff;
+  font-size: 20px;
+}
+
+/* full-width royal footer */
+.app-footer {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 40px;
+  z-index: 20;
+  background: var(--footer-bg);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 18px;
+  font-size: 12px;
+}
+.app-footer .prepared {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  opacity: 0.95;
+}
+.app-footer .prepared .logo-badge {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  background: #fff;
+}
+
+@media (max-width: 992px) {
+  .left-nav_container {
+    position: static;
+    width: 100%;
+    height: auto;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .main-container_block {
+    margin: 0;
+    padding: 16px 16px 56px;
+  }
+  .right-navbar_container {
+    display: none;
+  }
+}
+
+/* 6. Cards / page header */
+.card {
+  background: var(--card-bg);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: var(--shadow-md);
+}
+.card > .card-header {
+  background: #fff;
+  border-bottom: 1px solid var(--line2);
+  font-weight: 700;
+  color: var(--primary);
+}
+.page-header_block {
+  padding-bottom: 1.25rem;
+}
+.stat-value {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--primary);
+}
+
+/* 7. Tables — dark slate header, striped rows (CamuTable look) */
+.camu-table {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+.camu-table > thead > tr > th {
+  background: var(--table-head-bg) !important;
+  color: #fff !important;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  font-weight: 600;
+  border: 0;
+  padding: 12px 14px;
+  white-space: nowrap;
+}
+.camu-table > thead > tr > th:first-child {
+  border-top-left-radius: 8px;
+}
+.camu-table > thead > tr > th:last-child {
+  border-top-right-radius: 8px;
+}
+.camu-table > tbody > tr > td {
+  border: 0;
+  border-bottom: 1px solid var(--line2);
+  color: var(--primary);
+}
+.camu-table > tbody > tr:nth-child(even) {
+  background: var(--table-stripe);
+}
+.camu-table > tbody > tr:hover {
+  background: #e6ecfa;
+}
+.table-list_body {
+  cursor: default;
+}
+.rowlink {
+  cursor: pointer;
+}
+
+/* 8. Student profile banner (screenshot 3) */
+.profile-banner {
+  background: var(--banner-bg);
+  border: 1px solid #d5e6f5;
+  border-radius: 12px;
+  padding: 20px;
+}
+.profile-banner .field-row {
+  display: flex;
+  gap: 10px;
+  padding: 4px 0;
+  font-size: 0.9rem;
+}
+.profile-banner .field-row .k {
+  width: 190px;
+  color: var(--secondary);
+}
+.profile-banner .field-row .sep {
+  color: var(--secondary);
+}
+
+/* 9. Camera stage + misc */
+.stage {
+  position: relative;
+  width: 100%;
+  background: #eef2f7;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+  aspect-ratio: 4/3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.stage video,
+.stage canvas,
+.stage img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.stage .ph {
+  color: var(--secondary);
+  font-size: 13px;
+  text-align: center;
+  padding: 20px;
+  z-index: 0;
+}
+.stage canvas.ovl {
+  z-index: 2;
+  pointer-events: none;
+}
+.avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: #dbe3ee;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--secondary);
+  font-size: 10px;
+  overflow: hidden;
+}
+.avatar.square {
+  border-radius: 8px;
+}
+.avatar.lg {
+  width: 130px;
+  height: 130px;
+  border-radius: 12px;
+}
+.present-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line2);
+}
+.present-item:last-child {
+  border-bottom: 0;
+}
+.toast-msg {
+  position: fixed;
+  bottom: 52px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--primary);
+  color: #fff;
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  z-index: 1080;
+  box-shadow: var(--shadow-md);
+}
+
+/* 10. Auth screens (institution select + login) */
+.auth-wrap {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  padding: 28px;
+  background: #fff;
+}
+@media (max-width: 900px) {
+  .auth-wrap {
+    grid-template-columns: 1fr;
+  }
+  .auth-promo {
+    display: none;
+  }
+}
+.auth-promo {
+  background: var(--royal);
+  border-radius: 22px;
+  color: #fff;
+  padding: 22px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+}
+.auth-promo .promo-img {
+  width: 100%;
+  height: 58%;
+  object-fit: cover;
+  border-radius: 14px;
+  background: #6478c6;
+}
+.auth-promo h2 {
+  text-align: center;
+  font-weight: 700;
+  margin: 22px 0 10px;
+}
+.auth-promo p {
+  text-align: center;
+  color: #dbe2f5;
+  font-size: 0.95rem;
+  margin: 0 8px;
+}
+.auth-promo .prepared {
+  margin-top: auto;
+  text-align: center;
+  color: #cdd6ef;
+  font-size: 12px;
+}
+.auth-promo .prepared .line {
+  border-top: 1px solid rgba(255, 255, 255, 0.3);
+  margin: 14px 40px 10px;
+}
+.auth-panel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.auth-card {
+  width: 100%;
+  max-width: 440px;
+}
+.auth-logo {
+  text-align: center;
+  margin-bottom: 6px;
+}
+.auth-logo .badge-lg {
+  width: 54px;
+  height: 54px;
+  border-radius: 12px;
+  background: var(--royal);
+  display: inline-block;
+}
+.auth-title {
+  text-align: center;
+  font-weight: 700;
+  color: var(--primary);
+  margin: 14px 0 6px;
+}
+.auth-hr {
+  border: 0;
+  border-top: 1px solid var(--line);
+  margin: 14px 0;
+}
+.auth-hint {
+  background: #eaf3fb;
+  color: #3a5675;
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 12.5px;
+  margin-top: 10px;
+}
+.auth-foot {
+  text-align: center;
+  color: var(--secondary);
+  font-size: 12px;
+  margin-top: 18px;
+}
+.btn-royal {
+  background: var(--royal);
+  border: 1px solid var(--royal);
+  color: #fff;
+  width: 100%;
+}
+.btn-royal:hover {
+  background: var(--royal-d);
+  border-color: var(--royal-d);
+  color: #fff;
+}

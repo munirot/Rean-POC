@@ -1,0 +1,2552 @@
+[
+  {
+    "InId": "IN001",
+    "LoginID": "LG-2301",
+    "StuID": "2301",
+    "stuSts": "A",
+    "menus": [
+      {
+        "code": "MYINST"
+      },
+      {
+        "code": "ATTND"
+      },
+      {
+        "code": "EXAMSCH"
+      },
+      {
+        "code": "GRADE"
+      },
+      {
+        "code": "REPORTS"
+      },
+      {
+        "code": "PROGREP"
+      },
+      {
+        "code": "ASSESS"
+      },
+      {
+        "code": "HOLIDAY"
+      },
+      {
+        "code": "TIMETBL"
+      },
+      {
+        "code": "LEAVE"
+      },
+      {
+        "code": "SERVICES"
+      },
+      {
+        "code": "BILLING"
+      },
+      {
+        "code": "COUNSEL"
+      },
+      {
+        "code": "ENROLL"
+      },
+      {
+        "code": "TRANSCRIPT"
+      },
+      {
+        "code": "ACTIVITY"
+      },
+      {
+        "code": "CLEARANCE"
+      },
+      {
+        "code": "ANNOUNCE"
+      },
+      {
+        "code": "FEEDBACK"
+      },
+      {
+        "code": "PROJECT"
+      },
+      {
+        "code": "SCHOLAR"
+      },
+      {
+        "code": "EPORT"
+      },
+      {
+        "code": "FINALRES"
+      },
+      {
+        "code": "IDCARD"
+      },
+      {
+        "code": "DOCREC"
+      }
+    ],
+    "StFl": "A",
+    "CrAt": "2026-07-13 00:00:00+00:00"
+  },
+  {
+    "InId": "IN001",
+    "LoginID": "LG-2302",
+    "StuID": "2302",
+    "stuSts": "A",
+    "menus": [
+      {
+        "code": "MYINST"
+      },
+      {
+        "code": "ATTND"
+      },
+      {
+        "code": "EXAMSCH"
+      },
+      {
+        "code": "GRADE"
+      },
+      {
+        "code": "REPORTS"
+      },
+      {
+        "code": "PROGREP"
+      },
+      {
+        "code": "ASSESS"
+      },
+      {
+        "code": "HOLIDAY"
+      },
+      {
+        "code": "TIMETBL"
+      },
+      {
+        "code": "LEAVE"
+      },
+      {
+        "code": "SERVICES"
+      },
+      {
+        "code": "BILLING"
+      },
+      {
+        "code": "COUNSEL"
+      },
+      {
+        "code": "ENROLL"
+      },
+      {
+        "code": "TRANSCRIPT"
+      },
+      {
+        "code": "ACTIVITY"
+      },
+      {
+        "code": "CLEARANCE"
+      },
+      {
+        "code": "ANNOUNCE"
+      },
+      {
+        "code": "FEEDBACK"
+      },
+      {
+        "code": "PROJECT"
+      },
+      {
+        "code": "SCHOLAR"
+      },
+      {
+        "code": "EPORT"
+      },
+      {
+        "code": "FINALRES"
+      },
+      {
+        "code": "IDCARD"
+      },
+      {
+        "code": "DOCREC"
+      }
+    ],
+    "StFl": "A",
+    "CrAt": "2026-07-13 00:00:00+00:00"
+  },
+  {
+    "InId": "IN001",
+    "LoginID": "LG-2303",
+    "StuID": "2303",
+    "stuSts": "A",
+    "menus": [
+      {
+        "code": "MYINST"
+      },
+      {
+        "code": "ATTND"
+      },
+      {
+        "code": "EXAMSCH"
+      },
+      {
+        "code": "GRADE"
+      },
+      {
+        "code": "REPORTS"
+      },
+      {
+        "code": "PROGREP"
+      },
+      {
+        "code": "ASSESS"
+      },
+      {
+        "code": "HOLIDAY"
+      },
+      {
+        "code": "TIMETBL"
+      },
+      {
+        "code": "LEAVE"
+      },
+      {
+        "code": "SERVICES"
+      },
+      {
+        "code": "BILLING"
+      },
+      {
+        "code": "COUNSEL"
+      },
+      {
+        "code": "ENROLL"
+      },
+      {
+        "code": "TRANSCRIPT"
+      },
+      {
+        "code": "ACTIVITY"
+      },
+      {
+        "code": "CLEARANCE"
+      },
+      {
+        "code": "ANNOUNCE"
+      },
+      {
+        "code": "FEEDBACK"
+      },
+      {
+        "code": "PROJECT"
+      },
+      {
+        "code": "SCHOLAR"
+      },
+      {
+        "code": "EPORT"
+      },
+      {
+        "code": "FINALRES"
+      },
+      {
+        "code": "IDCARD"
+      },
+      {
+        "code": "DOCREC"
+      }
+    ],
+    "StFl": "A",
+    "CrAt": "2026-07-13 00:00:00+00:00"
+  },
+  {
+    "InId": "IN001",
+    "LoginID": "LG-2304",
+    "StuID": "2304",
+    "stuSts": "A",
+    "menus": [
+      {
+        "code": "MYINST"
+      },
+      {
+        "code": "ATTND"
+      },
+      {
+        "code": "EXAMSCH"
+      },
+      {
+        "code": "GRADE"
+      },
+      {
+        "code": "REPORTS"
+      },
+      {
+        "code": "PROGREP"
+      },
+      {
+        "code": "ASSESS"
+      },
+      {
+        "code": "HOLIDAY"
+      },
+      {
+        "code": "TIMETBL"
+      },
+      {
+        "code": "LEAVE"
+      },
+      {
+        "code": "SERVICES"
+      },
+      {
+        "code": "BILLING"
+      },
+      {
+        "code": "COUNSEL"
+      },
+      {
+        "code": "ENROLL"
+      },
+      {
+        "code": "TRANSCRIPT"
+      },
+      {
+        "code": "ACTIVITY"
+      },
+      {
+        "code": "CLEARANCE"
+      },
+      {
+        "code": "ANNOUNCE"
+      },
+      {
+        "code": "FEEDBACK"
+      },
+      {
+        "code": "PROJECT"
+      },
+      {
+        "code": "SCHOLAR"
+      },
+      {
+        "code": "EPORT"
+      },
+      {
+        "code": "FINALRES"
+      },
+      {
+        "code": "IDCARD"
+      },
+      {
+        "code": "DOCREC"
+      }
+    ],
+    "StFl": "A",
+    "CrAt": "2026-07-13 00:00:00+00:00"
+  },
+  {
+    "InId": "IN001",
+    "LoginID": "LG-2305",
+    "StuID": "2305",
+    "stuSts": "A",
+    "menus": [
+      {
+        "code": "MYINST"
+      },
+      {
+        "code": "ATTND"
+      },
+      {
+        "code": "EXAMSCH"
+      },
+      {
+        "code": "GRADE"
+      },
+      {
+        "code": "REPORTS"
+      },
+      {
+        "code": "PROGREP"
+      },
+      {
+        "code": "ASSESS"
+      },
+      {
+        "code": "HOLIDAY"
+      },
+      {
+        "code": "TIMETBL"
+      },
+      {
+        "code": "LEAVE"
+      },
+      {
+        "code": "SERVICES"
+      },
+      {
+        "code": "BILLING"
+      },
+      {
+        "code": "COUNSEL"
+      },
+      {
+        "code": "ENROLL"
+      },
+      {
+        "code": "TRANSCRIPT"
+      },
+      {
+        "code": "ACTIVITY"
+      },
+      {
+        "code": "CLEARANCE"
+      },
+      {
+        "code": "ANNOUNCE"
+      },
+      {
+        "code": "FEEDBACK"
+      },
+      {
+        "code": "PROJECT"
+      },
+      {
+        "code": "SCHOLAR"
+      },
+      {
+        "code": "EPORT"
+      },
+      {
+        "code": "FINALRES"
+      },
+      {
+        "code": "IDCARD"
+      },
+      {
+        "code": "DOCREC"
+      }
+    ],
+    "StFl": "A",
+    "CrAt": "2026-07-13 00:00:00+00:00"
+  },
+  {
+    "InId": "IN001",
+    "LoginID": "LG-2306",
+    "StuID": "2306",
+    "stuSts": "A",
+    "menus": [
+      {
+        "code": "MYINST"
+      },
+      {
+        "code": "ATTND"
+      },
+      {
+        "code": "EXAMSCH"
+      },
+      {
+        "code": "GRADE"
+      },
+      {
+        "code": "REPORTS"
+      },
+      {
+        "code": "PROGREP"
+      },
+      {
+        "code": "ASSESS"
+      },
+      {
+        "code": "HOLIDAY"
+      },
+      {
+        "code": "TIMETBL"
+      },
+      {
+        "code": "LEAVE"
+      },
+      {
+        "code": "SERVICES"
+      },
+      {
+        "code": "BILLING"
+      },
+      {
+        "code": "COUNSEL"
+      },
+      {
+        "code": "ENROLL"
+      },
+      {
+        "code": "TRANSCRIPT"
+      },
+      {
+        "code": "ACTIVITY"
+      },
+      {
+        "code": "CLEARANCE"
+      },
+      {
+        "code": "ANNOUNCE"
+      },
+      {
+        "code": "FEEDBACK"
+      },
+      {
+        "code": "PROJECT"
+      },
+      {
+        "code": "SCHOLAR"
+      },
+      {
+        "code": "EPORT"
+      },
+      {
+        "code": "FINALRES"
+      },
+      {
+        "code": "IDCARD"
+      },
+      {
+        "code": "DOCREC"
+      }
+    ],
+    "StFl": "A",
+    "CrAt": "2026-07-13 00:00:00+00:00"
+  },
+  {
+    "InId": "IN001",
+    "LoginID": "LG-2307",
+    "StuID": "2307",
+    "stuSts": "A",
+    "menus": [
+      {
+        "code": "MYINST"
+      },
+      {
+        "code": "ATTND"
+      },
+      {
+        "code": "EXAMSCH"
+      },
+      {
+        "code": "GRADE"
+      },
+      {
+        "code": "REPORTS"
+      },
+      {
+        "code": "PROGREP"
+      },
+      {
+        "code": "ASSESS"
+      },
+      {
+        "code": "HOLIDAY"
+      },
+      {
+        "code": "TIMETBL"
+      },
+      {
+        "code": "LEAVE"
+      },
+      {
+        "code": "SERVICES"
+      },
+      {
+        "code": "BILLING"
+      },
+      {
+        "code": "COUNSEL"
+      },
+      {
+        "code": "ENROLL"
+      },
+      {
+        "code": "TRANSCRIPT"
+      },
+      {
+        "code": "ACTIVITY"
+      },
+      {
+        "code": "CLEARANCE"
+      },
+      {
+        "code": "ANNOUNCE"
+      },
+      {
+        "code": "FEEDBACK"
+      },
+      {
+        "code": "PROJECT"
+      },
+      {
+        "code": "SCHOLAR"
+      },
+      {
+        "code": "EPORT"
+      },
+      {
+        "code": "FINALRES"
+      },
+      {
+        "code": "IDCARD"
+      },
+      {
+        "code": "DOCREC"
+      }
+    ],
+    "StFl": "A",
+    "CrAt": "2026-07-13 00:00:00+00:00"
+  },
+  {
+    "InId": "IN001",
+    "LoginID": "LG-2308",
+    "StuID": "2308",
+    "stuSts": "A",
+    "menus": [
+      {
+        "code": "MYINST"
+      },
+      {
+        "code": "ATTND"
+      },
+      {
+        "code": "EXAMSCH"
+      },
+      {
+        "code": "GRADE"
+      },
+      {
+        "code": "REPORTS"
+      },
+      {
+        "code": "PROGREP"
+      },
+      {
+        "code": "ASSESS"
+      },
+      {
+        "code": "HOLIDAY"
+      },
+      {
+        "code": "TIMETBL"
+      },
+      {
+        "code": "LEAVE"
+      },
+      {
+        "code": "SERVICES"
+      },
+      {
+        "code": "BILLING"
+      },
+      {
+        "code": "COUNSEL"
+      },
+      {
+        "code": "ENROLL"
+      },
+      {
+        "code": "TRANSCRIPT"
+      },
+      {
+        "code": "ACTIVITY"
+      },
+      {
+        "code": "CLEARANCE"
+      },
+      {
+        "code": "ANNOUNCE"
+      },
+      {
+        "code": "FEEDBACK"
+      },
+      {
+        "code": "PROJECT"
+      },
+      {
+        "code": "SCHOLAR"
+      },
+      {
+        "code": "EPORT"
+      },
+      {
+        "code": "FINALRES"
+      },
+      {
+        "code": "IDCARD"
+      },
+      {
+        "code": "DOCREC"
+      }
+    ],
+    "StFl": "A",
+    "CrAt": "2026-07-13 00:00:00+00:00"
+  },
+  {
+    "InId": "IN001",
+    "LoginID": "LG-2309",
+    "StuID": "2309",
+    "stuSts": "A",
+    "menus": [
+      {
+        "code": "MYINST"
+      },
+      {
+        "code": "ATTND"
+      },
+      {
+        "code": "EXAMSCH"
+      },
+      {
+        "code": "GRADE"
+      },
+      {
+        "code": "REPORTS"
+      },
+      {
+        "code": "PROGREP"
+      },
+      {
+        "code": "ASSESS"
+      },
+      {
+        "code": "HOLIDAY"
+      },
+      {
+        "code": "TIMETBL"
+      },
+      {
+        "code": "LEAVE"
+      },
+      {
+        "code": "SERVICES"
+      },
+      {
+        "code": "BILLING"
+      },
+      {
+        "code": "COUNSEL"
+      },
+      {
+        "code": "ENROLL"
+      },
+      {
+        "code": "TRANSCRIPT"
+      },
+      {
+        "code": "ACTIVITY"
+      },
+      {
+        "code": "CLEARANCE"
+      },
+      {
+        "code": "ANNOUNCE"
+      },
+      {
+        "code": "FEEDBACK"
+      },
+      {
+        "code": "PROJECT"
+      },
+      {
+        "code": "SCHOLAR"
+      },
+      {
+        "code": "EPORT"
+      },
+      {
+        "code": "FINALRES"
+      },
+      {
+        "code": "IDCARD"
+      },
+      {
+        "code": "DOCREC"
+      }
+    ],
+    "StFl": "A",
+    "CrAt": "2026-07-13 00:00:00+00:00"
+  },
+  {
+    "InId": "IN001",
+    "LoginID": "LG-2310",
+    "StuID": "2310",
+    "stuSts": "A",
+    "menus": [
+      {
+        "code": "MYINST"
+      },
+      {
+        "code": "ATTND"
+      },
+      {
+        "code": "EXAMSCH"
+      },
+      {
+        "code": "GRADE"
+      },
+      {
+        "code": "REPORTS"
+      },
+      {
+        "code": "PROGREP"
+      },
+      {
+        "code": "ASSESS"
+      },
+      {
+        "code": "HOLIDAY"
+      },
+      {
+        "code": "TIMETBL"
+      },
+      {
+        "code": "LEAVE"
+      },
+      {
+        "code": "SERVICES"
+      },
+      {
+        "code": "BILLING"
+      },
+      {
+        "code": "COUNSEL"
+      },
+      {
+        "code": "ENROLL"
+      },
+      {
+        "code": "TRANSCRIPT"
+      },
+      {
+        "code": "ACTIVITY"
+      },
+      {
+        "code": "CLEARANCE"
+      },
+      {
+        "code": "ANNOUNCE"
+      },
+      {
+        "code": "FEEDBACK"
+      },
+      {
+        "code": "PROJECT"
+      },
+      {
+        "code": "SCHOLAR"
+      },
+      {
+        "code": "EPORT"
+      },
+      {
+        "code": "FINALRES"
+      },
+      {
+        "code": "IDCARD"
+      },
+      {
+        "code": "DOCREC"
+      }
+    ],
+    "StFl": "A",
+    "CrAt": "2026-07-13 00:00:00+00:00"
+  },
+  {
+    "InId": "IN001",
+    "LoginID": "LG-2311",
+    "StuID": "2311",
+    "stuSts": "A",
+    "menus": [
+      {
+        "code": "MYINST"
+      },
+      {
+        "code": "ATTND"
+      },
+      {
+        "code": "EXAMSCH"
+      },
+      {
+        "code": "GRADE"
+      },
+      {
+        "code": "REPORTS"
+      },
+      {
+        "code": "PROGREP"
+      },
+      {
+        "code": "ASSESS"
+      },
+      {
+        "code": "HOLIDAY"
+      },
+      {
+        "code": "TIMETBL"
+      },
+      {
+        "code": "LEAVE"
+      },
+      {
+        "code": "SERVICES"
+      },
+      {
+        "code": "BILLING"
+      },
+      {
+        "code": "COUNSEL"
+      },
+      {
+        "code": "ENROLL"
+      },
+      {
+        "code": "TRANSCRIPT"
+      },
+      {
+        "code": "ACTIVITY"
+      },
+      {
+        "code": "CLEARANCE"
+      },
+      {
+        "code": "ANNOUNCE"
+      },
+      {
+        "code": "FEEDBACK"
+      },
+      {
+        "code": "PROJECT"
+      },
+      {
+        "code": "SCHOLAR"
+      },
+      {
+        "code": "EPORT"
+      },
+      {
+        "code": "FINALRES"
+      },
+      {
+        "code": "IDCARD"
+      },
+      {
+        "code": "DOCREC"
+      }
+    ],
+    "StFl": "A",
+    "CrAt": "2026-07-13 00:00:00+00:00"
+  },
+  {
+    "InId": "IN001",
+    "LoginID": "LG-2312",
+    "StuID": "2312",
+    "stuSts": "A",
+    "menus": [
+      {
+        "code": "MYINST"
+      },
+      {
+        "code": "ATTND"
+      },
+      {
+        "code": "EXAMSCH"
+      },
+      {
+        "code": "GRADE"
+      },
+      {
+        "code": "REPORTS"
+      },
+      {
+        "code": "PROGREP"
+      },
+      {
+        "code": "ASSESS"
+      },
+      {
+        "code": "HOLIDAY"
+      },
+      {
+        "code": "TIMETBL"
+      },
+      {
+        "code": "LEAVE"
+      },
+      {
+        "code": "SERVICES"
+      },
+      {
+        "code": "BILLING"
+      },
+      {
+        "code": "COUNSEL"
+      },
+      {
+        "code": "ENROLL"
+      },
+      {
+        "code": "TRANSCRIPT"
+      },
+      {
+        "code": "ACTIVITY"
+      },
+      {
+        "code": "CLEARANCE"
+      },
+      {
+        "code": "ANNOUNCE"
+      },
+      {
+        "code": "FEEDBACK"
+      },
+      {
+        "code": "PROJECT"
+      },
+      {
+        "code": "SCHOLAR"
+      },
+      {
+        "code": "EPORT"
+      },
+      {
+        "code": "FINALRES"
+      },
+      {
+        "code": "IDCARD"
+      },
+      {
+        "code": "DOCREC"
+      }
+    ],
+    "StFl": "A",
+    "CrAt": "2026-07-13 00:00:00+00:00"
+  },
+  {
+    "InId": "IN001",
+    "LoginID": "LG-2313",
+    "StuID": "2313",
+    "stuSts": "A",
+    "menus": [
+      {
+        "code": "MYINST"
+      },
+      {
+        "code": "ATTND"
+      },
+      {
+        "code": "EXAMSCH"
+      },
+      {
+        "code": "GRADE"
+      },
+      {
+        "code": "REPORTS"
+      },
+      {
+        "code": "PROGREP"
+      },
+      {
+        "code": "ASSESS"
+      },
+      {
+        "code": "HOLIDAY"
+      },
+      {
+        "code": "TIMETBL"
+      },
+      {
+        "code": "LEAVE"
+      },
+      {
+        "code": "SERVICES"
+      },
+      {
+        "code": "BILLING"
+      },
+      {
+        "code": "COUNSEL"
+      },
+      {
+        "code": "ENROLL"
+      },
+      {
+        "code": "TRANSCRIPT"
+      },
+      {
+        "code": "ACTIVITY"
+      },
+      {
+        "code": "CLEARANCE"
+      },
+      {
+        "code": "ANNOUNCE"
+      },
+      {
+        "code": "FEEDBACK"
+      },
+      {
+        "code": "PROJECT"
+      },
+      {
+        "code": "SCHOLAR"
+      },
+      {
+        "code": "EPORT"
+      },
+      {
+        "code": "FINALRES"
+      },
+      {
+        "code": "IDCARD"
+      },
+      {
+        "code": "DOCREC"
+      }
+    ],
+    "StFl": "A",
+    "CrAt": "2026-07-13 00:00:00+00:00"
+  },
+  {
+    "InId": "IN001",
+    "LoginID": "LG-2314",
+    "StuID": "2314",
+    "stuSts": "A",
+    "menus": [
+      {
+        "code": "MYINST"
+      },
+      {
+        "code": "ATTND"
+      },
+      {
+        "code": "EXAMSCH"
+      },
+      {
+        "code": "GRADE"
+      },
+      {
+        "code": "REPORTS"
+      },
+      {
+        "code": "PROGREP"
+      },
+      {
+        "code": "ASSESS"
+      },
+      {
+        "code": "HOLIDAY"
+      },
+      {
+        "code": "TIMETBL"
+      },
+      {
+        "code": "LEAVE"
+      },
+      {
+        "code": "SERVICES"
+      },
+      {
+        "code": "BILLING"
+      },
+      {
+        "code": "COUNSEL"
+      },
+      {
+        "code": "ENROLL"
+      },
+      {
+        "code": "TRANSCRIPT"
+      },
+      {
+        "code": "ACTIVITY"
+      },
+      {
+        "code": "CLEARANCE"
+      },
+      {
+        "code": "ANNOUNCE"
+      },
+      {
+        "code": "FEEDBACK"
+      },
+      {
+        "code": "PROJECT"
+      },
+      {
+        "code": "SCHOLAR"
+      },
+      {
+        "code": "EPORT"
+      },
+      {
+        "code": "FINALRES"
+      },
+      {
+        "code": "IDCARD"
+      },
+      {
+        "code": "DOCREC"
+      }
+    ],
+    "StFl": "A",
+    "CrAt": "2026-07-13 00:00:00+00:00"
+  },
+  {
+    "InId": "IN001",
+    "LoginID": "LG-2315",
+    "StuID": "2315",
+    "stuSts": "A",
+    "menus": [
+      {
+        "code": "MYINST"
+      },
+      {
+        "code": "ATTND"
+      },
+      {
+        "code": "EXAMSCH"
+      },
+      {
+        "code": "GRADE"
+      },
+      {
+        "code": "REPORTS"
+      },
+      {
+        "code": "PROGREP"
+      },
+      {
+        "code": "ASSESS"
+      },
+      {
+        "code": "HOLIDAY"
+      },
+      {
+        "code": "TIMETBL"
+      },
+      {
+        "code": "LEAVE"
+      },
+      {
+        "code": "SERVICES"
+      },
+      {
+        "code": "BILLING"
+      },
+      {
+        "code": "COUNSEL"
+      },
+      {
+        "code": "ENROLL"
+      },
+      {
+        "code": "TRANSCRIPT"
+      },
+      {
+        "code": "ACTIVITY"
+      },
+      {
+        "code": "CLEARANCE"
+      },
+      {
+        "code": "ANNOUNCE"
+      },
+      {
+        "code": "FEEDBACK"
+      },
+      {
+        "code": "PROJECT"
+      },
+      {
+        "code": "SCHOLAR"
+      },
+      {
+        "code": "EPORT"
+      },
+      {
+        "code": "FINALRES"
+      },
+      {
+        "code": "IDCARD"
+      },
+      {
+        "code": "DOCREC"
+      }
+    ],
+    "StFl": "A",
+    "CrAt": "2026-07-13 00:00:00+00:00"
+  },
+  {
+    "InId": "IN001",
+    "LoginID": "LG-2316",
+    "StuID": "2316",
+    "stuSts": "A",
+    "menus": [
+      {
+        "code": "MYINST"
+      },
+      {
+        "code": "ATTND"
+      },
+      {
+        "code": "EXAMSCH"
+      },
+      {
+        "code": "GRADE"
+      },
+      {
+        "code": "REPORTS"
+      },
+      {
+        "code": "PROGREP"
+      },
+      {
+        "code": "ASSESS"
+      },
+      {
+        "code": "HOLIDAY"
+      },
+      {
+        "code": "TIMETBL"
+      },
+      {
+        "code": "LEAVE"
+      },
+      {
+        "code": "SERVICES"
+      },
+      {
+        "code": "BILLING"
+      },
+      {
+        "code": "COUNSEL"
+      },
+      {
+        "code": "ENROLL"
+      },
+      {
+        "code": "TRANSCRIPT"
+      },
+      {
+        "code": "ACTIVITY"
+      },
+      {
+        "code": "CLEARANCE"
+      },
+      {
+        "code": "ANNOUNCE"
+      },
+      {
+        "code": "FEEDBACK"
+      },
+      {
+        "code": "PROJECT"
+      },
+      {
+        "code": "SCHOLAR"
+      },
+      {
+        "code": "EPORT"
+      },
+      {
+        "code": "FINALRES"
+      },
+      {
+        "code": "IDCARD"
+      },
+      {
+        "code": "DOCREC"
+      }
+    ],
+    "StFl": "A",
+    "CrAt": "2026-07-13 00:00:00+00:00"
+  },
+  {
+    "InId": "IN001",
+    "LoginID": "LG-2317",
+    "StuID": "2317",
+    "stuSts": "A",
+    "menus": [
+      {
+        "code": "MYINST"
+      },
+      {
+        "code": "ATTND"
+      },
+      {
+        "code": "EXAMSCH"
+      },
+      {
+        "code": "GRADE"
+      },
+      {
+        "code": "REPORTS"
+      },
+      {
+        "code": "PROGREP"
+      },
+      {
+        "code": "ASSESS"
+      },
+      {
+        "code": "HOLIDAY"
+      },
+      {
+        "code": "TIMETBL"
+      },
+      {
+        "code": "LEAVE"
+      },
+      {
+        "code": "SERVICES"
+      },
+      {
+        "code": "BILLING"
+      },
+      {
+        "code": "COUNSEL"
+      },
+      {
+        "code": "ENROLL"
+      },
+      {
+        "code": "TRANSCRIPT"
+      },
+      {
+        "code": "ACTIVITY"
+      },
+      {
+        "code": "CLEARANCE"
+      },
+      {
+        "code": "ANNOUNCE"
+      },
+      {
+        "code": "FEEDBACK"
+      },
+      {
+        "code": "PROJECT"
+      },
+      {
+        "code": "SCHOLAR"
+      },
+      {
+        "code": "EPORT"
+      },
+      {
+        "code": "FINALRES"
+      },
+      {
+        "code": "IDCARD"
+      },
+      {
+        "code": "DOCREC"
+      }
+    ],
+    "StFl": "A",
+    "CrAt": "2026-07-13 00:00:00+00:00"
+  },
+  {
+    "InId": "IN001",
+    "LoginID": "LG-2318",
+    "StuID": "2318",
+    "stuSts": "A",
+    "menus": [
+      {
+        "code": "MYINST"
+      },
+      {
+        "code": "ATTND"
+      },
+      {
+        "code": "EXAMSCH"
+      },
+      {
+        "code": "GRADE"
+      },
+      {
+        "code": "REPORTS"
+      },
+      {
+        "code": "PROGREP"
+      },
+      {
+        "code": "ASSESS"
+      },
+      {
+        "code": "HOLIDAY"
+      },
+      {
+        "code": "TIMETBL"
+      },
+      {
+        "code": "LEAVE"
+      },
+      {
+        "code": "SERVICES"
+      },
+      {
+        "code": "BILLING"
+      },
+      {
+        "code": "COUNSEL"
+      },
+      {
+        "code": "ENROLL"
+      },
+      {
+        "code": "TRANSCRIPT"
+      },
+      {
+        "code": "ACTIVITY"
+      },
+      {
+        "code": "CLEARANCE"
+      },
+      {
+        "code": "ANNOUNCE"
+      },
+      {
+        "code": "FEEDBACK"
+      },
+      {
+        "code": "PROJECT"
+      },
+      {
+        "code": "SCHOLAR"
+      },
+      {
+        "code": "EPORT"
+      },
+      {
+        "code": "FINALRES"
+      },
+      {
+        "code": "IDCARD"
+      },
+      {
+        "code": "DOCREC"
+      }
+    ],
+    "StFl": "A",
+    "CrAt": "2026-07-13 00:00:00+00:00"
+  },
+  {
+    "InId": "IN001",
+    "LoginID": "LG-2319",
+    "StuID": "2319",
+    "stuSts": "A",
+    "menus": [
+      {
+        "code": "MYINST"
+      },
+      {
+        "code": "ATTND"
+      },
+      {
+        "code": "EXAMSCH"
+      },
+      {
+        "code": "GRADE"
+      },
+      {
+        "code": "REPORTS"
+      },
+      {
+        "code": "PROGREP"
+      },
+      {
+        "code": "ASSESS"
+      },
+      {
+        "code": "HOLIDAY"
+      },
+      {
+        "code": "TIMETBL"
+      },
+      {
+        "code": "LEAVE"
+      },
+      {
+        "code": "SERVICES"
+      },
+      {
+        "code": "BILLING"
+      },
+      {
+        "code": "COUNSEL"
+      },
+      {
+        "code": "ENROLL"
+      },
+      {
+        "code": "TRANSCRIPT"
+      },
+      {
+        "code": "ACTIVITY"
+      },
+      {
+        "code": "CLEARANCE"
+      },
+      {
+        "code": "ANNOUNCE"
+      },
+      {
+        "code": "FEEDBACK"
+      },
+      {
+        "code": "PROJECT"
+      },
+      {
+        "code": "SCHOLAR"
+      },
+      {
+        "code": "EPORT"
+      },
+      {
+        "code": "FINALRES"
+      },
+      {
+        "code": "IDCARD"
+      },
+      {
+        "code": "DOCREC"
+      }
+    ],
+    "StFl": "A",
+    "CrAt": "2026-07-13 00:00:00+00:00"
+  },
+  {
+    "InId": "IN001",
+    "LoginID": "LG-2320",
+    "StuID": "2320",
+    "stuSts": "A",
+    "menus": [
+      {
+        "code": "MYINST"
+      },
+      {
+        "code": "ATTND"
+      },
+      {
+        "code": "EXAMSCH"
+      },
+      {
+        "code": "GRADE"
+      },
+      {
+        "code": "REPORTS"
+      },
+      {
+        "code": "PROGREP"
+      },
+      {
+        "code": "ASSESS"
+      },
+      {
+        "code": "HOLIDAY"
+      },
+      {
+        "code": "TIMETBL"
+      },
+      {
+        "code": "LEAVE"
+      },
+      {
+        "code": "SERVICES"
+      },
+      {
+        "code": "BILLING"
+      },
+      {
+        "code": "COUNSEL"
+      },
+      {
+        "code": "ENROLL"
+      },
+      {
+        "code": "TRANSCRIPT"
+      },
+      {
+        "code": "ACTIVITY"
+      },
+      {
+        "code": "CLEARANCE"
+      },
+      {
+        "code": "ANNOUNCE"
+      },
+      {
+        "code": "FEEDBACK"
+      },
+      {
+        "code": "PROJECT"
+      },
+      {
+        "code": "SCHOLAR"
+      },
+      {
+        "code": "EPORT"
+      },
+      {
+        "code": "FINALRES"
+      },
+      {
+        "code": "IDCARD"
+      },
+      {
+        "code": "DOCREC"
+      }
+    ],
+    "StFl": "A",
+    "CrAt": "2026-07-13 00:00:00+00:00"
+  },
+  {
+    "InId": "IN001",
+    "LoginID": "LG-2321",
+    "StuID": "2321",
+    "stuSts": "A",
+    "menus": [
+      {
+        "code": "MYINST"
+      },
+      {
+        "code": "ATTND"
+      },
+      {
+        "code": "EXAMSCH"
+      },
+      {
+        "code": "GRADE"
+      },
+      {
+        "code": "REPORTS"
+      },
+      {
+        "code": "PROGREP"
+      },
+      {
+        "code": "ASSESS"
+      },
+      {
+        "code": "HOLIDAY"
+      },
+      {
+        "code": "TIMETBL"
+      },
+      {
+        "code": "LEAVE"
+      },
+      {
+        "code": "SERVICES"
+      },
+      {
+        "code": "BILLING"
+      },
+      {
+        "code": "COUNSEL"
+      },
+      {
+        "code": "ENROLL"
+      },
+      {
+        "code": "TRANSCRIPT"
+      },
+      {
+        "code": "ACTIVITY"
+      },
+      {
+        "code": "CLEARANCE"
+      },
+      {
+        "code": "ANNOUNCE"
+      },
+      {
+        "code": "FEEDBACK"
+      },
+      {
+        "code": "PROJECT"
+      },
+      {
+        "code": "SCHOLAR"
+      },
+      {
+        "code": "EPORT"
+      },
+      {
+        "code": "FINALRES"
+      },
+      {
+        "code": "IDCARD"
+      },
+      {
+        "code": "DOCREC"
+      }
+    ],
+    "StFl": "A",
+    "CrAt": "2026-07-13 00:00:00+00:00"
+  },
+  {
+    "InId": "IN001",
+    "LoginID": "LG-2322",
+    "StuID": "2322",
+    "stuSts": "A",
+    "menus": [
+      {
+        "code": "MYINST"
+      },
+      {
+        "code": "ATTND"
+      },
+      {
+        "code": "EXAMSCH"
+      },
+      {
+        "code": "GRADE"
+      },
+      {
+        "code": "REPORTS"
+      },
+      {
+        "code": "PROGREP"
+      },
+      {
+        "code": "ASSESS"
+      },
+      {
+        "code": "HOLIDAY"
+      },
+      {
+        "code": "TIMETBL"
+      },
+      {
+        "code": "LEAVE"
+      },
+      {
+        "code": "SERVICES"
+      },
+      {
+        "code": "BILLING"
+      },
+      {
+        "code": "COUNSEL"
+      },
+      {
+        "code": "ENROLL"
+      },
+      {
+        "code": "TRANSCRIPT"
+      },
+      {
+        "code": "ACTIVITY"
+      },
+      {
+        "code": "CLEARANCE"
+      },
+      {
+        "code": "ANNOUNCE"
+      },
+      {
+        "code": "FEEDBACK"
+      },
+      {
+        "code": "PROJECT"
+      },
+      {
+        "code": "SCHOLAR"
+      },
+      {
+        "code": "EPORT"
+      },
+      {
+        "code": "FINALRES"
+      },
+      {
+        "code": "IDCARD"
+      },
+      {
+        "code": "DOCREC"
+      }
+    ],
+    "StFl": "A",
+    "CrAt": "2026-07-13 00:00:00+00:00"
+  },
+  {
+    "InId": "IN001",
+    "LoginID": "LG-2323",
+    "StuID": "2323",
+    "stuSts": "A",
+    "menus": [
+      {
+        "code": "MYINST"
+      },
+      {
+        "code": "ATTND"
+      },
+      {
+        "code": "EXAMSCH"
+      },
+      {
+        "code": "GRADE"
+      },
+      {
+        "code": "REPORTS"
+      },
+      {
+        "code": "PROGREP"
+      },
+      {
+        "code": "ASSESS"
+      },
+      {
+        "code": "HOLIDAY"
+      },
+      {
+        "code": "TIMETBL"
+      },
+      {
+        "code": "LEAVE"
+      },
+      {
+        "code": "SERVICES"
+      },
+      {
+        "code": "BILLING"
+      },
+      {
+        "code": "COUNSEL"
+      },
+      {
+        "code": "ENROLL"
+      },
+      {
+        "code": "TRANSCRIPT"
+      },
+      {
+        "code": "ACTIVITY"
+      },
+      {
+        "code": "CLEARANCE"
+      },
+      {
+        "code": "ANNOUNCE"
+      },
+      {
+        "code": "FEEDBACK"
+      },
+      {
+        "code": "PROJECT"
+      },
+      {
+        "code": "SCHOLAR"
+      },
+      {
+        "code": "EPORT"
+      },
+      {
+        "code": "FINALRES"
+      },
+      {
+        "code": "IDCARD"
+      },
+      {
+        "code": "DOCREC"
+      }
+    ],
+    "StFl": "A",
+    "CrAt": "2026-07-13 00:00:00+00:00"
+  },
+  {
+    "InId": "IN001",
+    "LoginID": "LG-2324",
+    "StuID": "2324",
+    "stuSts": "A",
+    "menus": [
+      {
+        "code": "MYINST"
+      },
+      {
+        "code": "ATTND"
+      },
+      {
+        "code": "EXAMSCH"
+      },
+      {
+        "code": "GRADE"
+      },
+      {
+        "code": "REPORTS"
+      },
+      {
+        "code": "PROGREP"
+      },
+      {
+        "code": "ASSESS"
+      },
+      {
+        "code": "HOLIDAY"
+      },
+      {
+        "code": "TIMETBL"
+      },
+      {
+        "code": "LEAVE"
+      },
+      {
+        "code": "SERVICES"
+      },
+      {
+        "code": "BILLING"
+      },
+      {
+        "code": "COUNSEL"
+      },
+      {
+        "code": "ENROLL"
+      },
+      {
+        "code": "TRANSCRIPT"
+      },
+      {
+        "code": "ACTIVITY"
+      },
+      {
+        "code": "CLEARANCE"
+      },
+      {
+        "code": "ANNOUNCE"
+      },
+      {
+        "code": "FEEDBACK"
+      },
+      {
+        "code": "PROJECT"
+      },
+      {
+        "code": "SCHOLAR"
+      },
+      {
+        "code": "EPORT"
+      },
+      {
+        "code": "FINALRES"
+      },
+      {
+        "code": "IDCARD"
+      },
+      {
+        "code": "DOCREC"
+      }
+    ],
+    "StFl": "A",
+    "CrAt": "2026-07-13 00:00:00+00:00"
+  },
+  {
+    "InId": "IN001",
+    "LoginID": "LG-2325",
+    "StuID": "2325",
+    "stuSts": "A",
+    "menus": [
+      {
+        "code": "MYINST"
+      },
+      {
+        "code": "ATTND"
+      },
+      {
+        "code": "EXAMSCH"
+      },
+      {
+        "code": "GRADE"
+      },
+      {
+        "code": "REPORTS"
+      },
+      {
+        "code": "PROGREP"
+      },
+      {
+        "code": "ASSESS"
+      },
+      {
+        "code": "HOLIDAY"
+      },
+      {
+        "code": "TIMETBL"
+      },
+      {
+        "code": "LEAVE"
+      },
+      {
+        "code": "SERVICES"
+      },
+      {
+        "code": "BILLING"
+      },
+      {
+        "code": "COUNSEL"
+      },
+      {
+        "code": "ENROLL"
+      },
+      {
+        "code": "TRANSCRIPT"
+      },
+      {
+        "code": "ACTIVITY"
+      },
+      {
+        "code": "CLEARANCE"
+      },
+      {
+        "code": "ANNOUNCE"
+      },
+      {
+        "code": "FEEDBACK"
+      },
+      {
+        "code": "PROJECT"
+      },
+      {
+        "code": "SCHOLAR"
+      },
+      {
+        "code": "EPORT"
+      },
+      {
+        "code": "FINALRES"
+      },
+      {
+        "code": "IDCARD"
+      },
+      {
+        "code": "DOCREC"
+      }
+    ],
+    "StFl": "A",
+    "CrAt": "2026-07-13 00:00:00+00:00"
+  },
+  {
+    "InId": "IN001",
+    "LoginID": "LG-2326",
+    "StuID": "2326",
+    "stuSts": "A",
+    "menus": [
+      {
+        "code": "MYINST"
+      },
+      {
+        "code": "ATTND"
+      },
+      {
+        "code": "EXAMSCH"
+      },
+      {
+        "code": "GRADE"
+      },
+      {
+        "code": "REPORTS"
+      },
+      {
+        "code": "PROGREP"
+      },
+      {
+        "code": "ASSESS"
+      },
+      {
+        "code": "HOLIDAY"
+      },
+      {
+        "code": "TIMETBL"
+      },
+      {
+        "code": "LEAVE"
+      },
+      {
+        "code": "SERVICES"
+      },
+      {
+        "code": "BILLING"
+      },
+      {
+        "code": "COUNSEL"
+      },
+      {
+        "code": "ENROLL"
+      },
+      {
+        "code": "TRANSCRIPT"
+      },
+      {
+        "code": "ACTIVITY"
+      },
+      {
+        "code": "CLEARANCE"
+      },
+      {
+        "code": "ANNOUNCE"
+      },
+      {
+        "code": "FEEDBACK"
+      },
+      {
+        "code": "PROJECT"
+      },
+      {
+        "code": "SCHOLAR"
+      },
+      {
+        "code": "EPORT"
+      },
+      {
+        "code": "FINALRES"
+      },
+      {
+        "code": "IDCARD"
+      },
+      {
+        "code": "DOCREC"
+      }
+    ],
+    "StFl": "A",
+    "CrAt": "2026-07-13 00:00:00+00:00"
+  },
+  {
+    "InId": "IN001",
+    "LoginID": "LG-2327",
+    "StuID": "2327",
+    "stuSts": "A",
+    "menus": [
+      {
+        "code": "MYINST"
+      },
+      {
+        "code": "ATTND"
+      },
+      {
+        "code": "EXAMSCH"
+      },
+      {
+        "code": "GRADE"
+      },
+      {
+        "code": "REPORTS"
+      },
+      {
+        "code": "PROGREP"
+      },
+      {
+        "code": "ASSESS"
+      },
+      {
+        "code": "HOLIDAY"
+      },
+      {
+        "code": "TIMETBL"
+      },
+      {
+        "code": "LEAVE"
+      },
+      {
+        "code": "SERVICES"
+      },
+      {
+        "code": "BILLING"
+      },
+      {
+        "code": "COUNSEL"
+      },
+      {
+        "code": "ENROLL"
+      },
+      {
+        "code": "TRANSCRIPT"
+      },
+      {
+        "code": "ACTIVITY"
+      },
+      {
+        "code": "CLEARANCE"
+      },
+      {
+        "code": "ANNOUNCE"
+      },
+      {
+        "code": "FEEDBACK"
+      },
+      {
+        "code": "PROJECT"
+      },
+      {
+        "code": "SCHOLAR"
+      },
+      {
+        "code": "EPORT"
+      },
+      {
+        "code": "FINALRES"
+      },
+      {
+        "code": "IDCARD"
+      },
+      {
+        "code": "DOCREC"
+      }
+    ],
+    "StFl": "A",
+    "CrAt": "2026-07-13 00:00:00+00:00"
+  },
+  {
+    "InId": "IN001",
+    "LoginID": "LG-2328",
+    "StuID": "2328",
+    "stuSts": "A",
+    "menus": [
+      {
+        "code": "MYINST"
+      },
+      {
+        "code": "ATTND"
+      },
+      {
+        "code": "EXAMSCH"
+      },
+      {
+        "code": "GRADE"
+      },
+      {
+        "code": "REPORTS"
+      },
+      {
+        "code": "PROGREP"
+      },
+      {
+        "code": "ASSESS"
+      },
+      {
+        "code": "HOLIDAY"
+      },
+      {
+        "code": "TIMETBL"
+      },
+      {
+        "code": "LEAVE"
+      },
+      {
+        "code": "SERVICES"
+      },
+      {
+        "code": "BILLING"
+      },
+      {
+        "code": "COUNSEL"
+      },
+      {
+        "code": "ENROLL"
+      },
+      {
+        "code": "TRANSCRIPT"
+      },
+      {
+        "code": "ACTIVITY"
+      },
+      {
+        "code": "CLEARANCE"
+      },
+      {
+        "code": "ANNOUNCE"
+      },
+      {
+        "code": "FEEDBACK"
+      },
+      {
+        "code": "PROJECT"
+      },
+      {
+        "code": "SCHOLAR"
+      },
+      {
+        "code": "EPORT"
+      },
+      {
+        "code": "FINALRES"
+      },
+      {
+        "code": "IDCARD"
+      },
+      {
+        "code": "DOCREC"
+      }
+    ],
+    "StFl": "A",
+    "CrAt": "2026-07-13 00:00:00+00:00"
+  },
+  {
+    "InId": "IN001",
+    "LoginID": "LG-2329",
+    "StuID": "2329",
+    "stuSts": "A",
+    "menus": [
+      {
+        "code": "MYINST"
+      },
+      {
+        "code": "ATTND"
+      },
+      {
+        "code": "EXAMSCH"
+      },
+      {
+        "code": "GRADE"
+      },
+      {
+        "code": "REPORTS"
+      },
+      {
+        "code": "PROGREP"
+      },
+      {
+        "code": "ASSESS"
+      },
+      {
+        "code": "HOLIDAY"
+      },
+      {
+        "code": "TIMETBL"
+      },
+      {
+        "code": "LEAVE"
+      },
+      {
+        "code": "SERVICES"
+      },
+      {
+        "code": "BILLING"
+      },
+      {
+        "code": "COUNSEL"
+      },
+      {
+        "code": "ENROLL"
+      },
+      {
+        "code": "TRANSCRIPT"
+      },
+      {
+        "code": "ACTIVITY"
+      },
+      {
+        "code": "CLEARANCE"
+      },
+      {
+        "code": "ANNOUNCE"
+      },
+      {
+        "code": "FEEDBACK"
+      },
+      {
+        "code": "PROJECT"
+      },
+      {
+        "code": "SCHOLAR"
+      },
+      {
+        "code": "EPORT"
+      },
+      {
+        "code": "FINALRES"
+      },
+      {
+        "code": "IDCARD"
+      },
+      {
+        "code": "DOCREC"
+      }
+    ],
+    "StFl": "A",
+    "CrAt": "2026-07-13 00:00:00+00:00"
+  },
+  {
+    "InId": "IN001",
+    "LoginID": "LG-2330",
+    "StuID": "2330",
+    "stuSts": "A",
+    "menus": [
+      {
+        "code": "MYINST"
+      },
+      {
+        "code": "ATTND"
+      },
+      {
+        "code": "EXAMSCH"
+      },
+      {
+        "code": "GRADE"
+      },
+      {
+        "code": "REPORTS"
+      },
+      {
+        "code": "PROGREP"
+      },
+      {
+        "code": "ASSESS"
+      },
+      {
+        "code": "HOLIDAY"
+      },
+      {
+        "code": "TIMETBL"
+      },
+      {
+        "code": "LEAVE"
+      },
+      {
+        "code": "SERVICES"
+      },
+      {
+        "code": "BILLING"
+      },
+      {
+        "code": "COUNSEL"
+      },
+      {
+        "code": "ENROLL"
+      },
+      {
+        "code": "TRANSCRIPT"
+      },
+      {
+        "code": "ACTIVITY"
+      },
+      {
+        "code": "CLEARANCE"
+      },
+      {
+        "code": "ANNOUNCE"
+      },
+      {
+        "code": "FEEDBACK"
+      },
+      {
+        "code": "PROJECT"
+      },
+      {
+        "code": "SCHOLAR"
+      },
+      {
+        "code": "EPORT"
+      },
+      {
+        "code": "FINALRES"
+      },
+      {
+        "code": "IDCARD"
+      },
+      {
+        "code": "DOCREC"
+      }
+    ],
+    "StFl": "A",
+    "CrAt": "2026-07-13 00:00:00+00:00"
+  }
+]

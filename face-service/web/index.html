@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>Rean · Face Attendance (Python API)</title>
+<style>
+  :root{--bg:#0f172a;--panel:#1e293b;--panel2:#273449;--line:#334155;--text:#e2e8f0;
+    --muted:#94a3b8;--brand:#38bdf8;--brand2:#0ea5e9;--ok:#22c55e;--warn:#f59e0b;--bad:#ef4444;--radius:14px}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--text);line-height:1.45}
+  header{padding:18px 20px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:14px;flex-wrap:wrap;background:linear-gradient(180deg,#111c33,#0f172a)}
+  header h1{font-size:18px;margin:0;font-weight:650}
+  header .sub{color:var(--muted);font-size:13px}
+  .status{margin-left:auto;font-size:12.5px;display:flex;align-items:center;gap:8px;text-align:right}
+  .dot{width:10px;height:10px;border-radius:50%;background:var(--warn);box-shadow:0 0 0 3px rgba(245,158,11,.15)}
+  .dot.ok{background:var(--ok);box-shadow:0 0 0 3px rgba(34,197,94,.15)}
+  .dot.bad{background:var(--bad);box-shadow:0 0 0 3px rgba(239,68,68,.15)}
+  main{max-width:1180px;margin:0 auto;padding:18px;display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  @media(max-width:900px){main{grid-template-columns:1fr}}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:16px;min-width:0}
+  .card h2{font-size:14px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:0 0 12px}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  button{background:var(--brand2);color:#04121f;border:0;border-radius:10px;padding:9px 14px;font-size:14px;font-weight:600;cursor:pointer;transition:.15s}
+  button:hover{background:var(--brand)}
+  button.ghost{background:transparent;color:var(--text);border:1px solid var(--line)}
+  button.ghost:hover{border-color:var(--brand)}
+  button:disabled{opacity:.4;cursor:not-allowed}
+  .hint{font-size:12.5px;color:var(--muted);margin:10px 0 0}
+  .students{display:flex;flex-direction:column;gap:10px;max-height:560px;overflow:auto}
+  .student{display:flex;gap:12px;align-items:center;background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:10px}
+  .avatar{width:52px;height:52px;border-radius:10px;object-fit:cover;background:#0b1220;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:11px;flex:0 0 auto;overflow:hidden;text-align:center}
+  .student .meta{flex:1;min-width:0}
+  .student .name{font-weight:600;font-size:14.5px}
+  .student .id{font-size:12px;color:var(--muted)}
+  .badge{font-size:11px;padding:3px 8px;border-radius:999px;font-weight:600;white-space:nowrap}
+  .badge.enrolled{background:rgba(34,197,94,.15);color:#4ade80}
+  .badge.pending{background:rgba(245,158,11,.15);color:#fbbf24}
+  .badge.none{background:rgba(148,163,184,.15);color:#cbd5e1}
+  .student .acts{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+  .student .acts button{padding:6px 10px;font-size:12.5px}
+  .stage{position:relative;width:100%;background:#050a16;border-radius:12px;overflow:hidden;aspect-ratio:4/3;display:flex;align-items:center;justify-content:center}
+  .stage video,.stage canvas,.stage img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}
+  .stage .placeholder{color:var(--muted);font-size:13px;text-align:center;padding:20px;z-index:0}
+  #overlay{z-index:2;pointer-events:none}
+  .results{margin-top:12px;display:flex;flex-direction:column;gap:8px}
+  .result{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;display:flex;align-items:center;gap:12px}
+  .result .who{font-weight:650;font-size:15px}
+  .result .sub{font-size:12.5px;color:var(--muted)}
+  .result.match{border-color:rgba(34,197,94,.5)}
+  .result.unknown{border-color:rgba(239,68,68,.4)}
+  .meter{flex:1;height:8px;background:#0b1220;border-radius:999px;overflow:hidden;min-width:80px}
+  .meter > i{display:block;height:100%;border-radius:999px;background:var(--ok)}
+  .pct{font-variant-numeric:tabular-nums;font-weight:700;font-size:15px;min-width:48px;text-align:right}
+  .slider{display:flex;align-items:center;gap:10px;margin-top:12px;font-size:13px;color:var(--muted)}
+  .slider input{flex:1}
+  .toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:#111c33;border:1px solid var(--line);padding:10px 16px;border-radius:10px;font-size:13px;opacity:0;transition:.25s;pointer-events:none;z-index:50;max-width:90vw}
+  .toast.show{opacity:1}
+  .legend{font-size:12px;color:var(--muted);margin-top:8px}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>Rean · Face Attendance <span style="color:var(--brand)">Python API</span></h1>
+    <div class="sub">InsightFace served from a Python backend · frontend calls it over HTTP</div>
+  </div>
+  <div class="status">
+    <span id="mdot" class="dot"></span>
+    <span id="mstatus">Connecting…</span>
+  </div>
+</header>
+
+<main>
+  <section class="card">
+    <h2>Sample students</h2>
+    <p class="hint" style="margin-top:0">
+      Some students already have a profile photo on file; new students don't.
+      <b>Enroll</b> a profile by uploading an image or capturing from the camera — the
+      backend detects the face and stores a 512-d embedding in MongoDB. Only enrolled
+      students can be recognized.
+    </p>
+    <div class="row" style="margin:12px 0">
+      <button class="ghost" id="reload">Refresh roster</button>
+      <button class="ghost" id="reset">Reset all profiles</button>
+    </div>
+    <div class="students" id="roster"><div class="hint">Loading…</div></div>
+    <div class="legend">
+      <span class="badge enrolled">Enrolled</span> embedding stored ·
+      <span class="badge pending">Profile expected</span> should be enrolled ·
+      <span class="badge none">New student</span> no profile
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Attendance detection</h2>
+    <div class="stage" id="stage">
+      <div class="placeholder" id="placeholder">Start the camera, or capture / upload a photo to run recognition.</div>
+      <video id="video" autoplay muted playsinline style="display:none"></video>
+      <img id="stillImg" style="display:none" alt="" />
+      <canvas id="overlay"></canvas>
+    </div>
+    <div class="row" style="margin-top:12px">
+      <button id="startCam">Start camera</button>
+      <button id="flipCam" class="ghost" disabled>Flip camera</button>
+      <button id="recognize" disabled>Recognize now</button>
+      <button id="stopCam" class="ghost" disabled>Stop</button>
+    </div>
+    <div class="row" style="margin-top:8px">
+      <label class="ghost" style="display:inline-flex;align-items:center;padding:9px 14px;border:1px solid var(--line);border-radius:10px;cursor:pointer;font-size:14px;font-weight:600">
+        📷 Capture / upload photo
+        <input id="photoInput" type="file" accept="image/*" capture="user" style="display:none" />
+      </label>
+      <span class="hint" style="margin:0">Best for phones — opens the camera and returns a photo.</span>
+    </div>
+    <div class="slider">
+      <span>Match strictness</span>
+      <input id="thresh" type="range" min="0.20" max="0.70" step="0.01" value="0.35" />
+      <span id="threshVal">0.35</span>
+    </div>
+    <div class="results" id="results"></div>
+    <p class="hint">
+      Accuracy = cosine similarity of the ArcFace embeddings (×100). A face is
+      <b>recognized</b> when similarity ≥ the strictness threshold. Threshold is sent to the
+      backend per request. Live mode continuously posts frames to <code>/api/recognize</code>.
+    </p>
+  </section>
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// Same-origin API when served by the Python app; override if hosting the page elsewhere.
+const API = (location.protocol.startsWith('http') ? '' : 'http://localhost:8000');
+
+const $ = s => document.querySelector(s);
+const mdot=$('#mdot'), mstatus=$('#mstatus'), rosterEl=$('#roster');
+const stage=$('#stage'), video=$('#video'), stillImg=$('#stillImg'), overlay=$('#overlay'), placeholder=$('#placeholder');
+const startCam=$('#startCam'), flipCam=$('#flipCam'), recognizeBtn=$('#recognize'), stopCam=$('#stopCam'), photoInput=$('#photoInput');
+const resultsEl=$('#results'), threshEl=$('#thresh'), threshVal=$('#threshVal'), toastEl=$('#toast');
+
+let stream=null, facing='user', liveLoop=null, busy=false, lastSource=null;
+
+function toast(m,ms=2800){toastEl.textContent=m;toastEl.classList.add('show');clearTimeout(toast._t);toast._t=setTimeout(()=>toastEl.classList.remove('show'),ms);}
+function isSecure(){return window.isSecureContext||['localhost','127.0.0.1'].includes(location.hostname);}
+function canvasToBlob(c){return new Promise(r=>c.toBlob(r,'image/jpeg',0.92));}
+
+// ---- health + roster -------------------------------------------------------
+async function refreshHealth(){
+  try{
+    const h=await (await fetch(API+'/api/health')).json();
+    if(h.mongo!=='up'){mdot.className='dot bad';mstatus.textContent='MongoDB down';return;}
+    mdot.className='dot ok';
+    mstatus.innerHTML=`${h.model_pack} · ${h.device} · ${h.enrolled}/${h.students} enrolled`;
+  }catch(e){mdot.className='dot bad';mstatus.textContent='Backend offline';}
+}
+async function loadRoster(){
+  try{
+    const list=await (await fetch(API+'/api/students')).json();
+    rosterEl.innerHTML='';
+    for(const s of list){
+      const badge = s.enrolled ? '<span class="badge enrolled">Enrolled</span>'
+        : s.expected ? '<span class="badge pending">Profile expected</span>'
+        : '<span class="badge none">New student</span>';
+      const row=document.createElement('div');row.className='student';
+      row.innerHTML=`
+        <div class="avatar">${s.thumb?`<img src="${s.thumb}" style="width:100%;height:100%;object-fit:cover">`:'no<br>photo'}</div>
+        <div class="meta"><div class="name">${s.name} ${badge}</div>
+          <div class="id">${s.sid} · ${s.cls||''}${s.quality?` · q ${s.quality}`:''}</div></div>
+        <div class="acts">
+          <button data-up="${s.sid}">Upload</button>
+          <button class="ghost" data-cam="${s.sid}">Camera</button>
+          ${s.enrolled?`<button class="ghost" data-del="${s.sid}">✕</button>`:''}
+        </div>`;
+      rosterEl.appendChild(row);
+    }
+    rosterEl.querySelectorAll('[data-up]').forEach(b=>b.onclick=()=>enrollByFile(b.dataset.up));
+    rosterEl.querySelectorAll('[data-cam]').forEach(b=>b.onclick=()=>enrollByCamera(b.dataset.cam));
+    rosterEl.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>unenroll(b.dataset.del));
+  }catch(e){rosterEl.innerHTML='<div class="hint">Could not reach backend at '+ (API||location.origin) +'/api</div>';}
+}
+
+// ---- enrollment ------------------------------------------------------------
+function enrollByFile(sid){
+  const inp=document.createElement('input');inp.type='file';inp.accept='image/*';
+  inp.onchange=async()=>{const f=inp.files[0];if(f) await postEnroll(sid,f);};
+  inp.click();
+}
+async function enrollByCamera(sid){
+  if(!stream){await openCamera();if(!stream) return;}
+  await new Promise(r=>setTimeout(r,400));
+  const c=grabFrame(); const blob=await canvasToBlob(c);
+  await postEnroll(sid,blob,'capture.jpg');
+}
+async function postEnroll(sid,fileOrBlob,name='upload.jpg'){
+  toast('Analyzing face…');
+  const fd=new FormData(); fd.append('file',fileOrBlob,name);
+  try{
+    const r=await fetch(`${API}/api/students/${sid}/enroll`,{method:'POST',body:fd});
+    const j=await r.json();
+    if(!j.ok){toast(j.message||'No face found — try a clearer photo.');return;}
+    toast(`Enrolled ${j.name} ✓ (quality ${j.quality})`);
+    await loadRoster(); refreshHealth();
+  }catch(e){toast('Enroll failed: '+e.message);}
+}
+async function unenroll(sid){
+  await fetch(`${API}/api/students/${sid}/enroll`,{method:'DELETE'});
+  await loadRoster(); refreshHealth(); toast('Profile removed');
+}
+
+// ---- camera ----------------------------------------------------------------
+async function openCamera(){
+  if(!isSecure()){toast('Live camera needs HTTPS or localhost. Use “Capture / upload photo”.',4200);return;}
+  try{
+    if(stream) stopStream();
+    stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:facing},audio:false});
+    video.srcObject=stream;video.style.display='block';stillImg.style.display='none';placeholder.style.display='none';
+    await video.play();
+    startCam.disabled=true;stopCam.disabled=false;flipCam.disabled=false;recognizeBtn.disabled=false;
+    lastSource='video'; startLiveLoop();
+  }catch(e){toast('Camera blocked: '+e.message,4200);}
+}
+function stopStream(){if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;}}
+function stopCamera(){
+  stopStream();if(liveLoop)cancelAnimationFrame(liveLoop);liveLoop=null;
+  video.style.display='none';clearOverlay();
+  startCam.disabled=false;stopCam.disabled=true;flipCam.disabled=true;recognizeBtn.disabled=true;
+  placeholder.style.display='block';
+}
+async function flip(){facing=facing==='user'?'environment':'user';await openCamera();}
+function grabFrame(){
+  const c=document.createElement('canvas');
+  c.width=video.videoWidth||640;c.height=video.videoHeight||480;
+  c.getContext('2d').drawImage(video,0,0,c.width,c.height);return c;
+}
+
+// ---- overlay ---------------------------------------------------------------
+function clearOverlay(){overlay.getContext('2d').clearRect(0,0,overlay.width,overlay.height);}
+function drawFaces(faces,w,h){
+  overlay.width=w;overlay.height=h;
+  const ctx=overlay.getContext('2d');clearOverlay();
+  ctx.lineWidth=Math.max(2,w/220);ctx.font=`${Math.max(14,w/40)}px system-ui`;ctx.textBaseline='bottom';
+  for(const f of faces){
+    const b=f.bbox, ok=f.recognized;
+    ctx.strokeStyle=ok?'#22c55e':'#ef4444';ctx.fillStyle=ctx.strokeStyle;
+    ctx.strokeRect(b.x,b.y,b.w,b.h);
+    const label=ok?`${f.name} · ${f.accuracy}%`:`Unknown ${f.accuracy?('· '+f.accuracy+'%'):''}`;
+    const tw=ctx.measureText(label).width+12;
+    ctx.fillRect(b.x,Math.max(0,b.y-26),tw,24);
+    ctx.fillStyle='#04121f';ctx.fillText(label,b.x+6,Math.max(20,b.y-4));
+  }
+}
+function renderResults(faces){
+  resultsEl.innerHTML='';
+  if(!faces.length){resultsEl.innerHTML='<div class="result unknown"><div class="who">No face detected</div></div>';return;}
+  for(const f of faces){
+    const cls=f.recognized?'match':'unknown';
+    const who=f.recognized?f.name:(f.reason==='no_enrolled_students'?'No profiles enrolled':'Unknown face');
+    const sub=f.reason==='no_enrolled_students'?'Enroll a student first'
+      :`${f.recognized?'matched':'closest'} · similarity ${f.similarity} · quality ${f.quality} · thr ${parseFloat(threshEl.value).toFixed(2)}`;
+    const el=document.createElement('div');el.className='result '+cls;
+    el.innerHTML=`<div style="flex:1;min-width:0">
+        <div class="who">${who} ${f.recognized?'<span style="color:var(--ok)">✓ present</span>':''}</div>
+        <div class="sub">${sub}</div></div>
+      <div class="meter"><i style="width:${f.accuracy}%;background:${f.recognized?'var(--ok)':'var(--bad)'}"></i></div>
+      <div class="pct">${f.accuracy}%</div>`;
+    resultsEl.appendChild(el);
+  }
+}
+
+// ---- recognition -----------------------------------------------------------
+async function recognizeBlob(blob){
+  const fd=new FormData();fd.append('file',blob,'frame.jpg');
+  fd.append('threshold',parseFloat(threshEl.value));
+  const r=await fetch(`${API}/api/recognize`,{method:'POST',body:fd});
+  if(!r.ok) throw new Error('HTTP '+r.status);
+  return r.json();
+}
+async function recognizeCurrentFrame(){
+  const c=grabFrame();const blob=await canvasToBlob(c);
+  const res=await recognizeBlob(blob);
+  drawFaces(res.faces,res.image_w,res.image_h);
+  renderResults(res.faces);
+}
+function startLiveLoop(){
+  let last=0;
+  const step=async(t)=>{
+    if(!stream) return;
+    if(t-last>600 && !busy && video.readyState>=2){
+      last=t;busy=true;
+      try{await recognizeCurrentFrame();}catch(e){/* transient */}finally{busy=false;}
+    }
+    liveLoop=requestAnimationFrame(step);
+  };
+  liveLoop=requestAnimationFrame(step);
+}
+async function handlePhoto(file){
+  stopCamera();
+  const url=URL.createObjectURL(file);
+  stillImg.src=url;stillImg.style.display='block';placeholder.style.display='none';
+  await new Promise(r=>{if(stillImg.complete)r();else stillImg.onload=r;});
+  toast('Detecting…');
+  try{
+    const res=await recognizeBlob(file);
+    drawFaces(res.faces,res.image_w,res.image_h);
+    renderResults(res.faces);
+    if(!res.faces.length) toast('No face detected in the photo.');
+  }catch(e){toast('Recognition failed: '+e.message);}
+}
+
+// ---- wire up ---------------------------------------------------------------
+startCam.onclick=openCamera;stopCam.onclick=stopCamera;flipCam.onclick=flip;
+recognizeBtn.onclick=async()=>{if(!stream)return;busy=true;try{await recognizeCurrentFrame();}finally{busy=false;}};
+photoInput.onchange=()=>{const f=photoInput.files[0];if(f)handlePhoto(f);photoInput.value='';};
+threshEl.oninput=()=>{threshVal.textContent=parseFloat(threshEl.value).toFixed(2);};
+$('#reload').onclick=()=>{loadRoster();refreshHealth();};
+$('#reset').onclick=async()=>{await fetch(API+'/api/students/reset',{method:'POST'});await loadRoster();refreshHealth();toast('All profiles cleared');};
+
+// ---- boot ------------------------------------------------------------------
+refreshHealth();
+loadRoster();
+setInterval(refreshHealth,8000);
+</script>
+</body>
+</html>

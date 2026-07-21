@@ -1,0 +1,12 @@
+version: "2"
+tunnels:
+  frontend:
+    addr: 3003
+    proto: http
+    host_header: "localhost:3003"
+    domain: "liked-sweeping-chimp.ngrok-free.app"
+  backend:
+    addr: 5001
+    proto: http
+    host_header: "localhost:5001"
+authtoken: 28bmMne8zBoDgvVVRA6mTyrth1H_7uxDXGHQuaGhVDymkZjC1

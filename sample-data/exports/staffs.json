@@ -1,0 +1,140 @@
+[
+  {
+    "StaffID": "ST001",
+    "InId": "IN001",
+    "LoginID": "LG-S001",
+    "Intls": "SD",
+    "SuNa": "Sok",
+    "FoNa": "Dara",
+    "Titl": "Mr.",
+    "Email": "dara.sok@rule.edu.kh",
+    "Phone": "091216739",
+    "Gend": "M",
+    "Dept": "DP004",
+    "Desi": "Lecturer",
+    "EmpCat": "Teaching",
+    "SubE": [
+      {
+        "SubID": "SB001"
+      }
+    ],
+    "DOJ": "2021-09-01",
+    "StFl": "A",
+    "CrAt": "2026-07-13 00:00:00+00:00"
+  },
+  {
+    "StaffID": "ST002",
+    "InId": "IN001",
+    "LoginID": "LG-S002",
+    "Intls": "CS",
+    "SuNa": "Chan",
+    "FoNa": "Sophal",
+    "Titl": "Mr.",
+    "Email": "sophal.chan@rule.edu.kh",
+    "Phone": "045356787",
+    "Gend": "M",
+    "Dept": "DP004",
+    "Desi": "Lecturer",
+    "EmpCat": "Teaching",
+    "SubE": [
+      {
+        "SubID": "SB002"
+      }
+    ],
+    "DOJ": "2021-09-01",
+    "StFl": "A",
+    "CrAt": "2026-07-13 00:00:00+00:00"
+  },
+  {
+    "StaffID": "ST003",
+    "InId": "IN001",
+    "LoginID": "LG-S003",
+    "Intls": "MV",
+    "SuNa": "Meas",
+    "FoNa": "Vichea",
+    "Titl": "Mr.",
+    "Email": "vichea.meas@rule.edu.kh",
+    "Phone": "023809570",
+    "Gend": "M",
+    "Dept": "DP001",
+    "Desi": "Senior Lecturer",
+    "EmpCat": "Teaching",
+    "SubE": [
+      {
+        "SubID": "SB003"
+      }
+    ],
+    "DOJ": "2021-09-01",
+    "StFl": "A",
+    "CrAt": "2026-07-13 00:00:00+00:00"
+  },
+  {
+    "StaffID": "ST004",
+    "InId": "IN001",
+    "LoginID": "LG-S004",
+    "Intls": "NR",
+    "SuNa": "Ngo",
+    "FoNa": "Rithy",
+    "Titl": "Mr.",
+    "Email": "rithy.ngo@rule.edu.kh",
+    "Phone": "021719176",
+    "Gend": "M",
+    "Dept": "DP002",
+    "Desi": "Assistant Professor",
+    "EmpCat": "Teaching",
+    "SubE": [
+      {
+        "SubID": "SB005"
+      }
+    ],
+    "DOJ": "2021-09-01",
+    "StFl": "A",
+    "CrAt": "2026-07-13 00:00:00+00:00"
+  },
+  {
+    "StaffID": "ST005",
+    "InId": "IN001",
+    "LoginID": "LG-S005",
+    "Intls": "VB",
+    "SuNa": "Voun",
+    "FoNa": "Bunly",
+    "Titl": "Mr.",
+    "Email": "bunly.voun@rule.edu.kh",
+    "Phone": "013198246",
+    "Gend": "M",
+    "Dept": "DP003",
+    "Desi": "Lecturer",
+    "EmpCat": "Teaching",
+    "SubE": [
+      {
+        "SubID": "SB007"
+      }
+    ],
+    "DOJ": "2021-09-01",
+    "StFl": "A",
+    "CrAt": "2026-07-13 00:00:00+00:00"
+  },
+  {
+    "StaffID": "ST006",
+    "InId": "IN001",
+    "LoginID": "LG-S006",
+    "Intls": "PS",
+    "SuNa": "Pich",
+    "FoNa": "Sovann",
+    "Titl": "Mr.",
+    "Email": "sovann.pich@rule.edu.kh",
+    "Phone": "074731262",
+    "Gend": "M",
+    "Dept": "DP003",
+    "Desi": "Lecturer",
+    "EmpCat": "Teaching",
+    "SubE": [
+      {
+        "SubID": "SB008"
+      }
+    ],
+    "DOJ": "2021-09-01",
+    "StFl": "A",
+    "CrAt": "2026-07-13 00:00:00+00:00"
+  }
+]

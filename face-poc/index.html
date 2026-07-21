@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>Rean · Face Attendance POC</title>
+<style>
+  :root{
+    --bg:#0f172a; --panel:#1e293b; --panel2:#273449; --line:#334155;
+    --text:#e2e8f0; --muted:#94a3b8; --brand:#38bdf8; --brand2:#0ea5e9;
+    --ok:#22c55e; --warn:#f59e0b; --bad:#ef4444; --radius:14px;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    background:var(--bg);color:var(--text);line-height:1.45;-webkit-font-smoothing:antialiased}
+  header{padding:18px 20px;border-bottom:1px solid var(--line);display:flex;
+    align-items:center;gap:14px;flex-wrap:wrap;background:linear-gradient(180deg,#111c33,#0f172a)}
+  header h1{font-size:18px;margin:0;font-weight:650}
+  header .sub{color:var(--muted);font-size:13px}
+  .status{margin-left:auto;font-size:13px;display:flex;align-items:center;gap:8px}
+  .dot{width:10px;height:10px;border-radius:50%;background:var(--warn);
+    box-shadow:0 0 0 3px rgba(245,158,11,.15)}
+  .dot.ok{background:var(--ok);box-shadow:0 0 0 3px rgba(34,197,94,.15)}
+  .dot.bad{background:var(--bad);box-shadow:0 0 0 3px rgba(239,68,68,.15)}
+  main{max-width:1180px;margin:0 auto;padding:18px;display:grid;
+    grid-template-columns:1fr 1fr;gap:18px}
+  @media(max-width:900px){main{grid-template-columns:1fr}}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+    padding:16px;min-width:0}
+  .card h2{font-size:14px;text-transform:uppercase;letter-spacing:.06em;
+    color:var(--muted);margin:0 0 12px}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  button{background:var(--brand2);color:#04121f;border:0;border-radius:10px;
+    padding:9px 14px;font-size:14px;font-weight:600;cursor:pointer;transition:.15s}
+  button:hover{background:var(--brand)}
+  button.ghost{background:transparent;color:var(--text);border:1px solid var(--line)}
+  button.ghost:hover{border-color:var(--brand)}
+  button:disabled{opacity:.4;cursor:not-allowed}
+  .hint{font-size:12.5px;color:var(--muted);margin:10px 0 0}
+  /* roster */
+  .students{display:flex;flex-direction:column;gap:10px;max-height:560px;overflow:auto}
+  .student{display:flex;gap:12px;align-items:center;background:var(--panel2);
+    border:1px solid var(--line);border-radius:12px;padding:10px}
+  .avatar{width:52px;height:52px;border-radius:10px;object-fit:cover;background:#0b1220;
+    display:flex;align-items:center;justify-content:center;color:var(--muted);
+    font-size:11px;flex:0 0 auto;overflow:hidden}
+  .student .meta{flex:1;min-width:0}
+  .student .name{font-weight:600;font-size:14.5px}
+  .student .id{font-size:12px;color:var(--muted)}
+  .badge{font-size:11px;padding:3px 8px;border-radius:999px;font-weight:600;white-space:nowrap}
+  .badge.enrolled{background:rgba(34,197,94,.15);color:#4ade80}
+  .badge.pending{background:rgba(245,158,11,.15);color:#fbbf24}
+  .badge.none{background:rgba(148,163,184,.15);color:#cbd5e1}
+  .student .acts{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+  .student .acts button{padding:6px 10px;font-size:12.5px}
+  /* detection */
+  .stage{position:relative;width:100%;background:#050a16;border-radius:12px;
+    overflow:hidden;aspect-ratio:4/3;display:flex;align-items:center;justify-content:center}
+  .stage video,.stage canvas,.stage img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}
+  .stage .placeholder{color:var(--muted);font-size:13px;text-align:center;padding:20px;z-index:0}
+  #overlay{z-index:2;pointer-events:none}
+  .results{margin-top:12px;display:flex;flex-direction:column;gap:8px}
+  .result{background:var(--panel2);border:1px solid var(--line);border-radius:10px;
+    padding:10px 12px;display:flex;align-items:center;gap:12px}
+  .result .who{font-weight:650;font-size:15px}
+  .result .sub{font-size:12.5px;color:var(--muted)}
+  .result.match{border-color:rgba(34,197,94,.5)}
+  .result.unknown{border-color:rgba(239,68,68,.4)}
+  .meter{flex:1;height:8px;background:#0b1220;border-radius:999px;overflow:hidden;min-width:80px}
+  .meter > i{display:block;height:100%;border-radius:999px;background:var(--ok)}
+  .pct{font-variant-numeric:tabular-nums;font-weight:700;font-size:15px;min-width:48px;text-align:right}
+  .slider{display:flex;align-items:center;gap:10px;margin-top:12px;font-size:13px;color:var(--muted)}
+  .slider input{flex:1}
+  .toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);
+    background:#111c33;border:1px solid var(--line);padding:10px 16px;border-radius:10px;
+    font-size:13px;opacity:0;transition:.25s;pointer-events:none;z-index:50}
+  .toast.show{opacity:1}
+  .legend{font-size:12px;color:var(--muted);margin-top:8px}
+  code{background:#0b1220;padding:1px 6px;border-radius:5px;font-size:12px}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>Rean · Face Attendance <span style="color:var(--brand)">POC</span></h1>
+    <div class="sub">Detection + recognition demo · runs entirely in your browser</div>
+  </div>
+  <div class="status"><span id="mdot" class="dot"></span><span id="mstatus">Loading models…</span></div>
+</header>
+
+<main>
+  <!-- STUDENTS -->
+  <section class="card">
+    <h2>Sample students</h2>
+    <p class="hint" style="margin-top:0">
+      Some students already have a profile photo on file; new students don't.
+      <b>Enroll</b> a profile by uploading an image or capturing from the camera — this
+      simulates the photo the school already holds. Only enrolled students can be recognized.
+    </p>
+    <div class="row" style="margin:12px 0">
+      <button class="ghost" id="enrollAllCam" title="Capture each expected student from camera in turn">Bulk enroll via camera…</button>
+      <button class="ghost" id="clearAll">Reset all profiles</button>
+    </div>
+    <div class="students" id="roster"></div>
+    <div class="legend">
+      Badge: <span class="badge enrolled">Enrolled</span> descriptor stored ·
+      <span class="badge pending">Profile expected</span> should be enrolled ·
+      <span class="badge none">New student</span> no profile
+    </div>
+  </section>
+
+  <!-- DETECTION -->
+  <section class="card">
+    <h2>Attendance detection</h2>
+    <div class="stage" id="stage">
+      <div class="placeholder" id="placeholder">Start the camera, or capture / upload a photo to run recognition.</div>
+      <video id="video" autoplay muted playsinline style="display:none"></video>
+      <img id="stillImg" style="display:none" alt="" />
+      <canvas id="overlay"></canvas>
+    </div>
+
+    <div class="row" style="margin-top:12px">
+      <button id="startCam">Start camera</button>
+      <button id="flipCam" class="ghost" disabled>Flip camera</button>
+      <button id="recognize" disabled>Recognize now</button>
+      <button id="stopCam" class="ghost" disabled>Stop</button>
+    </div>
+    <div class="row" style="margin-top:8px">
+      <label class="ghost" style="display:inline-flex;align-items:center;padding:9px 14px;border:1px solid var(--line);border-radius:10px;cursor:pointer;font-size:14px;font-weight:600">
+        📷 Capture / upload photo
+        <input id="photoInput" type="file" accept="image/*" capture="user" style="display:none" />
+      </label>
+      <span class="hint" style="margin:0">Best for phones — opens the camera and returns a photo.</span>
+    </div>
+
+    <div class="slider">
+      <span>Match strictness</span>
+      <input id="thresh" type="range" min="0.35" max="0.75" step="0.01" value="0.55" />
+      <span id="threshVal">0.55</span>
+    </div>
+
+    <div class="results" id="results"></div>
+    <p class="hint">
+      Score is cosine-style similarity from the 128-d face descriptor. A face counts as
+      <b>recognized</b> when its distance to an enrolled student is below the strictness threshold.
+      Lower threshold = stricter (fewer false matches).
+    </p>
+  </section>
+</main>
+
+<div class="toast" id="toast"></div>
+
+<!-- face-api.js (vladmandic fork, IIFE build exposes global `faceapi`) -->
+<script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.15/dist/face-api.js"></script>
+<script>
+const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.15/model';
+
+// ---- sample roster (some "profile expected", some brand-new) --------------
+const STUDENTS = [
+  { id:'S-1001', name:'Sophea Chan',   cls:'Grade 12-A', expected:true  },
+  { id:'S-1002', name:'Dara Kim',      cls:'Grade 12-A', expected:true  },
+  { id:'S-1003', name:'Bopha Sok',     cls:'Grade 12-A', expected:false },
+  { id:'S-1004', name:'Vichea Ngo',    cls:'Grade 12-B', expected:true  },
+  { id:'S-1005', name:'Sreymom Meas',  cls:'Grade 12-B', expected:false },
+  { id:'S-1006', name:'Rithy Voun',    cls:'Grade 12-B', expected:true  },
+  { id:'S-1007', name:'Chenda Pich',   cls:'Grade 12-C', expected:false },
+  { id:'S-1008', name:'Kosal Hun',     cls:'Grade 12-C', expected:true  },
+];
+// runtime enrollment store: id -> { descriptor:Float32Array, thumb:dataURL }
+const enrolled = new Map();
+
+// ---- element refs ----------------------------------------------------------
+const $ = s => document.querySelector(s);
+const mdot=$('#mdot'), mstatus=$('#mstatus'), rosterEl=$('#roster');
+const stage=$('#stage'), video=$('#video'), stillImg=$('#stillImg'),
+      overlay=$('#overlay'), placeholder=$('#placeholder');
+const startCam=$('#startCam'), flipCam=$('#flipCam'), recognizeBtn=$('#recognize'),
+      stopCam=$('#stopCam'), photoInput=$('#photoInput');
+const resultsEl=$('#results'), threshEl=$('#thresh'), threshVal=$('#threshVal');
+const toastEl=$('#toast');
+
+let modelsReady=false, stream=null, facing='user', liveLoop=null, busy=false;
+
+// ---- helpers ---------------------------------------------------------------
+function toast(msg,ms=2600){ toastEl.textContent=msg; toastEl.classList.add('show');
+  clearTimeout(toast._t); toast._t=setTimeout(()=>toastEl.classList.remove('show'),ms); }
+function detOptions(){ return new faceapi.TinyFaceDetectorOptions({inputSize:416,scoreThreshold:0.45}); }
+// distance -> similarity %: 0 dist = 100%, at/above ~1.0 -> ~0%
+function distToPct(d){ return Math.max(0, Math.round((1 - Math.min(d,1)) * 100)); }
+
+// ---- roster rendering ------------------------------------------------------
+function renderRoster(){
+  rosterEl.innerHTML='';
+  for(const s of STUDENTS){
+    const en = enrolled.get(s.id);
+    const row=document.createElement('div'); row.className='student';
+    const badge = en ? '<span class="badge enrolled">Enrolled</span>'
+                : s.expected ? '<span class="badge pending">Profile expected</span>'
+                : '<span class="badge none">New student</span>';
+    row.innerHTML = `
+      <div class="avatar">${en?`<img src="${en.thumb}" style="width:100%;height:100%;object-fit:cover">`:'no<br>photo'}</div>
+      <div class="meta">
+        <div class="name">${s.name} ${badge}</div>
+        <div class="id">${s.id} · ${s.cls}</div>
+      </div>
+      <div class="acts">
+        <button data-up="${s.id}">Upload</button>
+        <button class="ghost" data-cam="${s.id}">Camera</button>
+      </div>`;
+    rosterEl.appendChild(row);
+  }
+  rosterEl.querySelectorAll('[data-up]').forEach(b=>b.onclick=()=>enrollByFile(b.dataset.up));
+  rosterEl.querySelectorAll('[data-cam]').forEach(b=>b.onclick=()=>enrollByCamera(b.dataset.cam));
+}
+
+// ---- enrollment ------------------------------------------------------------
+async function descriptorFromImage(imgEl){
+  const res = await faceapi.detectSingleFace(imgEl, detOptions())
+    .withFaceLandmarks().withFaceDescriptor();
+  return res || null;
+}
+function makeThumb(imgEl, box){
+  const c=document.createElement('canvas'); c.width=100; c.height=100;
+  const ctx=c.getContext('2d');
+  if(box){ const m=box.width*0.3;
+    ctx.drawImage(imgEl, Math.max(0,box.x-m), Math.max(0,box.y-m),
+      box.width+2*m, box.height+2*m, 0,0,100,100);
+  } else ctx.drawImage(imgEl,0,0,100,100);
+  return c.toDataURL('image/jpeg',0.8);
+}
+function enrollByFile(id){
+  if(!modelsReady) return toast('Models still loading…');
+  const inp=document.createElement('input'); inp.type='file'; inp.accept='image/*';
+  inp.onchange=async()=>{ const f=inp.files[0]; if(!f) return;
+    const img=await fileToImage(f); await doEnroll(id,img); };
+  inp.click();
+}
+async function enrollByCamera(id){
+  if(!modelsReady) return toast('Models still loading…');
+  if(!stream){ await openCamera(); if(!stream) return; }
+  await new Promise(r=>setTimeout(r,400)); // let frame settle
+  const img=grabFrame();
+  await doEnroll(id,img);
+}
+async function doEnroll(id,img){
+  toast('Analyzing face…');
+  const res=await descriptorFromImage(img);
+  if(!res){ toast('No face found — try a clearer, front-facing photo.'); return; }
+  enrolled.set(id,{descriptor:res.descriptor, thumb:makeThumb(img,res.detection.box)});
+  renderRoster();
+  toast(`Enrolled ${STUDENTS.find(s=>s.id===id).name} ✓`);
+}
+function fileToImage(file){
+  return new Promise((res,rej)=>{ const img=new Image();
+    img.onload=()=>res(img); img.onerror=rej; img.src=URL.createObjectURL(file); });
+}
+
+// ---- camera ----------------------------------------------------------------
+async function openCamera(){
+  if(!isSecure()){ toast('Camera needs HTTPS or localhost. Use “Capture / upload photo” instead.',4200); return; }
+  try{
+    if(stream) stopStream();
+    stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:facing},audio:false});
+    video.srcObject=stream; video.style.display='block'; stillImg.style.display='none';
+    placeholder.style.display='none';
+    await video.play();
+    startCam.disabled=true; stopCam.disabled=false; flipCam.disabled=false; recognizeBtn.disabled=false;
+    startLiveLoop();
+  }catch(e){ toast('Camera blocked: '+e.message,4200); }
+}
+function stopStream(){ if(stream){ stream.getTracks().forEach(t=>t.stop()); stream=null; } }
+function stopCamera(){
+  stopStream(); if(liveLoop) cancelAnimationFrame(liveLoop); liveLoop=null;
+  video.style.display='none'; clearOverlay();
+  startCam.disabled=false; stopCam.disabled=true; flipCam.disabled=true; recognizeBtn.disabled=true;
+  placeholder.style.display='block';
+}
+async function flip(){ facing = facing==='user'?'environment':'user'; await openCamera(); }
+function grabFrame(){
+  const c=document.createElement('canvas');
+  c.width=video.videoWidth||640; c.height=video.videoHeight||480;
+  c.getContext('2d').drawImage(video,0,0,c.width,c.height); return c;
+}
+
+// ---- overlay sizing & drawing ---------------------------------------------
+function syncOverlay(w,h){ overlay.width=w; overlay.height=h; }
+function clearOverlay(){ overlay.getContext('2d').clearRect(0,0,overlay.width,overlay.height); }
+function drawFaces(dets, source){
+  // source dims -> overlay uses source pixel coords, CSS scales via object-fit:contain
+  syncOverlay(source.width||source.videoWidth, source.height||source.videoHeight);
+  const ctx=overlay.getContext('2d'); clearOverlay();
+  ctx.lineWidth=Math.max(2, overlay.width/220); ctx.font=`${Math.max(14,overlay.width/40)}px system-ui`;
+  ctx.textBaseline='bottom';
+  for(const d of dets){
+    const b=d.box, ok=d.match&&!d.unknown;
+    ctx.strokeStyle= ok?'#22c55e':'#ef4444'; ctx.fillStyle=ctx.strokeStyle;
+    ctx.strokeRect(b.x,b.y,b.width,b.height);
+    const label=d.label; const tw=ctx.measureText(label).width+12;
+    ctx.fillRect(b.x, Math.max(0,b.y-26), tw, 24);
+    ctx.fillStyle='#04121f'; ctx.fillText(label, b.x+6, Math.max(20,b.y-4));
+  }
+}
+
+// ---- matching --------------------------------------------------------------
+function matchDescriptor(desc){
+  const thr=parseFloat(threshEl.value); let best=null;
+  for(const s of STUDENTS){ const en=enrolled.get(s.id); if(!en) continue;
+    const dist=faceapi.euclideanDistance(desc, en.descriptor);
+    if(!best||dist<best.dist) best={student:s,dist}; }
+  if(!best) return {unknown:true, label:'No profiles enrolled', dist:null, pct:0};
+  const unknown = best.dist>thr;
+  return { unknown, student:best.student, dist:best.dist, pct:distToPct(best.dist),
+    label: unknown?`Unknown (${best.pct}%)`:`${best.student.name} · ${best.pct}%` };
+}
+
+// ---- recognition on a source (video canvas or image) -----------------------
+async function recognizeSource(source, srcW, srcH){
+  const results=await faceapi.detectAllFaces(source, detOptions())
+    .withFaceLandmarks().withFaceDescriptors();
+  const dets=results.map(r=>{
+    const m=matchDescriptor(r.descriptor);
+    return { box:r.detection.box, match:!!m.student, unknown:m.unknown, label:m.label, info:m };
+  });
+  drawFaces(dets, {width:srcW,height:srcH});
+  return dets;
+}
+function renderResults(dets){
+  resultsEl.innerHTML='';
+  if(!dets.length){ resultsEl.innerHTML='<div class="result unknown"><div class="who">No face detected</div></div>'; return; }
+  dets.forEach((d,i)=>{
+    const m=d.info, cls=m.unknown?'unknown':'match';
+    const who=m.unknown?(m.dist==null?'No profiles enrolled':'Unknown face'):m.student.name;
+    const sub=m.dist==null?'Enroll a student first'
+      :`${m.unknown?'closest':'matched'} · distance ${m.dist.toFixed(3)} · threshold ${parseFloat(threshEl.value).toFixed(2)}`;
+    const el=document.createElement('div'); el.className='result '+cls;
+    el.innerHTML=`<div style="flex:1;min-width:0">
+        <div class="who">${who} ${m.unknown?'':'<span style="color:var(--ok)">✓ present</span>'}</div>
+        <div class="sub">${sub}</div></div>
+      <div class="meter"><i style="width:${m.pct}%;background:${m.unknown?'var(--bad)':'var(--ok)'}"></i></div>
+      <div class="pct">${m.pct}%</div>`;
+    resultsEl.appendChild(el);
+  });
+}
+
+// ---- live loop (continuous detection on video) -----------------------------
+function startLiveLoop(){
+  let last=0;
+  const step=async(t)=>{
+    if(!stream){return;}
+    if(t-last>250 && !busy && video.readyState>=2){
+      last=t; busy=true;
+      try{
+        const c=grabFrame();
+        const dets=await recognizeSource(c, c.width, c.height);
+        renderResults(dets);
+      }catch(e){/* transient */} finally{ busy=false; }
+    }
+    liveLoop=requestAnimationFrame(step);
+  };
+  liveLoop=requestAnimationFrame(step);
+}
+
+// ---- still photo path (file input) -----------------------------------------
+async function handlePhoto(file){
+  if(!modelsReady) return toast('Models still loading…');
+  stopCamera();
+  const img=await fileToImage(file);
+  stillImg.src=img.src; stillImg.style.display='block'; placeholder.style.display='none';
+  await new Promise(r=>{ if(stillImg.complete) r(); else stillImg.onload=r; });
+  toast('Detecting…');
+  const dets=await recognizeSource(stillImg, stillImg.naturalWidth, stillImg.naturalHeight);
+  renderResults(dets);
+  if(!dets.length) toast('No face detected in the photo.');
+}
+
+// ---- misc ------------------------------------------------------------------
+function isSecure(){ return window.isSecureContext ||
+  ['localhost','127.0.0.1'].includes(location.hostname); }
+
+// ---- bulk enroll via camera (steps through expected students) --------------
+async function bulkEnroll(){
+  if(!modelsReady) return toast('Models still loading…');
+  if(!isSecure()) return toast('Bulk camera enroll needs HTTPS/localhost.',3800);
+  if(!stream){ await openCamera(); if(!stream) return; }
+  for(const s of STUDENTS.filter(s=>s.expected && !enrolled.get(s.id))){
+    if(!confirm(`Position ${s.name} in front of the camera, then OK to capture.`)) break;
+    await new Promise(r=>setTimeout(r,300));
+    const img=grabFrame(); await doEnroll(s.id,img);
+  }
+}
+
+// ---- wire up ---------------------------------------------------------------
+startCam.onclick=openCamera; stopCam.onclick=stopCamera; flipCam.onclick=flip;
+recognizeBtn.onclick=async()=>{ if(!stream) return; busy=true;
+  try{ const c=grabFrame(); const dets=await recognizeSource(c,c.width,c.height); renderResults(dets);}
+  finally{busy=false;} };
+photoInput.onchange=()=>{ const f=photoInput.files[0]; if(f) handlePhoto(f); photoInput.value=''; };
+threshEl.oninput=()=>{ threshVal.textContent=parseFloat(threshEl.value).toFixed(2); };
+$('#clearAll').onclick=()=>{ enrolled.clear(); renderRoster(); toast('All profiles cleared'); };
+$('#enrollAllCam').onclick=bulkEnroll;
+
+// ---- boot ------------------------------------------------------------------
+renderRoster();
+(async function loadModels(){
+  try{
+    if(typeof faceapi==='undefined') throw new Error('face-api failed to load (offline?)');
+    mstatus.textContent='Loading models…';
+    await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
+    await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL);
+    await faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL);
+    modelsReady=true; mdot.classList.add('ok'); mstatus.textContent='Models ready';
+    toast('Face models loaded — enroll a few students to begin.');
+  }catch(e){
+    mdot.classList.add('bad'); mstatus.textContent='Model load failed';
+    toast('Could not load models: '+e.message+' (needs internet).',5000);
+  }
+})();
+</script>
+</body>
+</html>

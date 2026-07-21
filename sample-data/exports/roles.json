@@ -1,0 +1,94 @@
+[
+  {
+    "code": "admin",
+    "name": "Administrator",
+    "menus": [
+      "DASH",
+      "REPORTS",
+      "STUDENTS",
+      "ATTND",
+      "ASSIGN",
+      "MYINST",
+      "ATTND",
+      "EXAMSCH",
+      "GRADE",
+      "REPORTS",
+      "PROGREP",
+      "ASSESS",
+      "HOLIDAY",
+      "TIMETBL",
+      "LEAVE",
+      "SERVICES",
+      "BILLING",
+      "COUNSEL",
+      "ENROLL",
+      "TRANSCRIPT",
+      "ACTIVITY",
+      "CLEARANCE",
+      "ANNOUNCE",
+      "FEEDBACK",
+      "PROJECT",
+      "SCHOLAR",
+      "EPORT",
+      "FINALRES",
+      "IDCARD",
+      "DOCREC"
+    ],
+    "StFl": "A"
+  },
+  {
+    "code": "staff",
+    "name": "Teacher / Staff",
+    "menus": [
+      "DASH",
+      "REPORTS",
+      "STUDENTS",
+      "ATTND",
+      "ASSIGN"
+    ],
+    "StFl": "A"
+  },
+  {
+    "code": "student",
+    "name": "Student",
+    "menus": [
+      "MYINST",
+      "ATTND",
+      "EXAMSCH",
+      "GRADE",
+      "REPORTS",
+      "PROGREP",
+      "ASSESS",
+      "HOLIDAY",
+      "TIMETBL",
+      "LEAVE",
+      "SERVICES",
+      "BILLING",
+      "COUNSEL",
+      "ENROLL",
+      "TRANSCRIPT",
+      "ACTIVITY",
+      "CLEARANCE",
+      "ANNOUNCE",
+      "FEEDBACK",
+      "PROJECT",
+      "SCHOLAR",
+      "EPORT",
+      "FINALRES",
+      "IDCARD",
+      "DOCREC"
+    ],
+    "StFl": "A"
+  },
+  {
+    "code": "parent",
+    "name": "Parent",
+    "menus": [
+      "MYINST",
+      "ATTND",
+      "GRADE",
+      "FINALRES"
+    ],
+    "StFl": "A"
+  }
+]

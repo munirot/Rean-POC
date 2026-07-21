@@ -1,0 +1,82 @@
+[
+  {
+    "SubID": "SB001",
+    "SubNa": "International Law",
+    "SubCd": "INT101",
+    "CrID": "CR001",
+    "DeptID": "DP004",
+    "InId": "IN001",
+    "credits": 3,
+    "StFl": "A"
+  },
+  {
+    "SubID": "SB002",
+    "SubNa": "Diplomacy & Negotiation",
+    "SubCd": "INT102",
+    "CrID": "CR001",
+    "DeptID": "DP004",
+    "InId": "IN001",
+    "credits": 3,
+    "StFl": "A"
+  },
+  {
+    "SubID": "SB003",
+    "SubNa": "Public Policy",
+    "SubCd": "PUB101",
+    "CrID": "CR002",
+    "DeptID": "DP001",
+    "InId": "IN001",
+    "credits": 3,
+    "StFl": "A"
+  },
+  {
+    "SubID": "SB004",
+    "SubNa": "Governance & Ethics",
+    "SubCd": "PUB102",
+    "CrID": "CR002",
+    "DeptID": "DP001",
+    "InId": "IN001",
+    "credits": 3,
+    "StFl": "A"
+  },
+  {
+    "SubID": "SB005",
+    "SubNa": "Constitutional Law",
+    "SubCd": "LAW101",
+    "CrID": "CR003",
+    "DeptID": "DP002",
+    "InId": "IN001",
+    "credits": 3,
+    "StFl": "A"
+  },
+  {
+    "SubID": "SB006",
+    "SubNa": "Criminal Law",
+    "SubCd": "LAW102",
+    "CrID": "CR003",
+    "DeptID": "DP002",
+    "InId": "IN001",
+    "credits": 3,
+    "StFl": "A"
+  },
+  {
+    "SubID": "SB007",
+    "SubNa": "Microeconomics",
+    "SubCd": "ECO101",
+    "CrID": "CR004",
+    "DeptID": "DP003",
+    "InId": "IN001",
+    "credits": 3,
+    "StFl": "A"
+  },
+  {
+    "SubID": "SB008",
+    "SubNa": "Statistics",
+    "SubCd": "ECO102",
+    "CrID": "CR004",
+    "DeptID": "DP003",
+    "InId": "IN001",
+    "credits": 3,
+    "StFl": "A"
+  }
+]

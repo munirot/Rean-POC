@@ -1,0 +1,20 @@
+# Face-attendance POC service.
+# Versions are left flexible so pip resolves wheels that match your Python.
+# Tested conceptually against Python 3.9–3.12 (3.11 recommended for InsightFace).
+
+fastapi>=0.110
+uvicorn[standard]>=0.30
+python-multipart>=0.0.9
+pymongo>=4.8
+
+# Face recognition model (InsightFace + ONNX Runtime CPU).
+# For GPU: install onnxruntime-gpu instead of onnxruntime and set DEVICE=gpu.
+insightface>=0.7.3
+onnxruntime>=1.17          # any current release is fine
+ml_dtypes>=0.5.4           # onnx 1.19+ needs float4_e2m1fn (Python 3.14)
+
+# Scientific / image deps.
+# InsightFace 0.7.3 is happiest on numpy 1.x. If your Python has no numpy<2 wheel
+# (e.g. Python 3.13+), drop the upper bound to just `numpy` — see README troubleshooting.
+numpy
+opencv-python-headless>=4.8
