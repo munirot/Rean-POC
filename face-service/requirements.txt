@@ -12,6 +12,9 @@ pymongo>=4.8
 insightface>=0.7.3
 onnxruntime>=1.17          # any current release is fine
 ml_dtypes>=0.5.4           # onnx 1.19+ needs float4_e2m1fn (Python 3.14)
+# Anti-spoofing (liveness) needs no extra package: the classical baseline uses
+# opencv+numpy (below); the optional MiniFASNet model runs on onnxruntime above.
+# Drop weights at ANTISPOOF_MODEL_PATH (default models/antispoof.onnx) to enable it.
 
 # Scientific / image deps.
 # InsightFace 0.7.3 is happiest on numpy 1.x. If your Python has no numpy<2 wheel

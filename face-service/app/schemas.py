@@ -34,6 +34,8 @@ class EnrollResult(BaseModel):
     embVer: str
     thumb: Optional[str] = None
     message: Optional[str] = None
+    live: Optional[bool] = None
+    liveness_score: Optional[float] = None
 
 
 class BBox(BaseModel):
@@ -53,6 +55,9 @@ class FaceMatch(BaseModel):
     similarity: float = 0.0
     accuracy: float = 0.0
     reason: Optional[str] = None
+    # Liveness / anti-spoofing (null when anti-spoofing is disabled)
+    live: Optional[bool] = None
+    liveness_score: Optional[float] = None
 
 
 class RecognizeResult(BaseModel):

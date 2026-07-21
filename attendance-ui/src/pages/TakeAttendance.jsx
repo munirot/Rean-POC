@@ -18,9 +18,7 @@ export default function TakeAttendance() {
   const [faces, setFaces] = useState([])
   const [dims, setDims] = useState({ w: 640, h: 480 })
   const [marked, setMarked] = useState([])
-  const [imgSrc, setImgSrc] = useState(null)
   const [toast, setToast] = useToast()
-  const fileRef = useRef(null)
 
   const cam = useCamera()
   const busy = useRef(false)
@@ -64,12 +62,8 @@ export default function TakeAttendance() {
     }
     loopRef.current = requestAnimationFrame(step)
   }
-  async function onStart() { setImgSrc(null); const ok = await cam.start(); if (!ok) return setToast(cam.error); startLive() }
+  async function onStart() { const ok = await cam.start(); if (!ok) return setToast(cam.error); startLive() }
   function onStop() { cancelAnimationFrame(loopRef.current); cam.stop(); setFaces([]) }
-  async function onPhoto(file) {
-    onStop(); setImgSrc(URL.createObjectURL(file))
-    try { await recognizeBlob(file) } catch (e) { setToast('Recognition failed: ' + e.message) }
-  }
   useEffect(() => () => cancelAnimationFrame(loopRef.current), [])
 
   return (
@@ -97,9 +91,9 @@ export default function TakeAttendance() {
                 </Col>
               </Row>
 
-              <FaceStage videoRef={cam.active ? cam.videoRef : null} imgSrc={imgSrc}
+              <FaceStage videoRef={cam.active ? cam.videoRef : null}
                 faces={faces} srcW={dims.w} srcH={dims.h}
-                placeholder="Start the camera or upload a class photo to recognize students." />
+                placeholder="Start the camera to recognize students. Live camera only — photo upload is disabled here to prevent spoofing." />
 
               <div className="d-flex flex-wrap gap-2 mt-3">
                 {!cam.active
@@ -108,11 +102,10 @@ export default function TakeAttendance() {
                       <Button variant="secondary" icon="flip" onClick={cam.flip}>Flip</Button>
                       <Button variant="secondary" icon="stop" onClick={onStop}>Stop</Button>
                     </>}
-                <Button variant="secondary" icon="photo" onClick={() => fileRef.current.click()}>Upload photo</Button>
-                <input ref={fileRef} type="file" accept="image/*" capture="environment" style={{ display: 'none' }}
-                  onChange={(e) => { const f = e.target.files[0]; if (f) onPhoto(f); e.target.value = '' }} />
               </div>
-              {!cam.secure && <p className="text-secondary fs-2 mt-2">Live camera needs HTTPS/localhost — photo upload works anywhere.</p>}
+              {!cam.secure && <p className="text-danger fs-2 mt-2">
+                Live camera needs HTTPS or localhost. Attendance can't be taken here without a working camera.
+              </p>}
             </Card.Body>
           </Card>
         </Col>

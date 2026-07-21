@@ -69,7 +69,7 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000
 | DELETE | `/api/students/{sid}/enroll` | — | removes the student's face profile |
 | POST | `/api/students/seed?force=true` | — | (re)seed sample roster |
 | POST | `/api/students/reset` | — | clear all embeddings |
-| POST | `/api/recognize` | multipart `file`, optional `threshold` | per-face `{bbox, name, similarity, accuracy, recognized}` |
+| POST | `/api/recognize` | multipart `file`, optional `threshold`, `source` | per-face `{bbox, name, similarity, accuracy, recognized, live, liveness_score}` |
 
 Interactive docs at **http://localhost:8000/docs**.
 
@@ -142,10 +142,36 @@ until the URI is fixed.
 The model failed to load — check the server log at startup. Usually a numpy/onnxruntime
 mismatch from the cases above.
 
+## Anti-spoofing (liveness)
+
+The service now runs a passive **presentation-attack check** before trusting any identity
+match, so a printed photo or a face shown on a screen is rejected instead of marked present.
+Details and rollout in `../docs/face-antispoofing-plan.md`.
+
+- **Combined gate:** `/api/recognize` returns `recognized=true` only when the identity
+  matches **and** the face passes liveness. A matched student presented as a photo comes
+  back `recognized=false, reason="spoof_suspected"` (distinct from `unknown`), plus
+  `live` and `liveness_score` fields. Enrollment applies a stricter liveness cutoff.
+- **Two backends, automatic:** if an ONNX model exists at `ANTISPOOF_MODEL_PATH`
+  (e.g. MiniFASNet / "Silent-Face-Anti-Spoofing"), it is used. Otherwise a built-in
+  classical-CV baseline (frequency-domain moiré, micro-texture, chroma, specular, focus)
+  runs so the check works out of the box. **Drop in the ONNX weights for production-grade
+  accuracy** — the baseline should be calibrated on real kiosk/phone samples.
+- **Config (`.env`):** `ANTISPOOF_ENABLED` (kill-switch → instant rollback),
+  `LIVENESS_THRESHOLD` / `ENROLL_LIVENESS_THRESHOLD`, per-source
+  `LIVENESS_THRESHOLD_KIOSK` / `_PHONE`, and `ANTISPOOF_FAIL_CLOSED` (refuse vs. allow on
+  model error). Pass `source=kiosk|phone` on `/api/recognize` to pick the per-source cutoff.
+
+```bash
+# a live face passes, a printout/screen is rejected:
+curl -s -F file=@live.jpg   -F source=phone localhost:8000/api/recognize | python3 -m json.tool
+```
+
 ## Notes & limitations
 
-- POC has **no liveness / anti-spoofing** — a photo of a photo can pass. Covered in the
-  production plan (`../docs/face-attendance-plan.md`).
+- Liveness ships with a **classical-CV baseline** that is a functional scaffold, not a
+  strong detector — install a MiniFASNet ONNX model and calibrate thresholds on real data
+  before relying on it. See `../docs/face-antispoofing-plan.md`.
 - Recognition matches every detected face against all enrolled embeddings (brute-force cosine).
   Fine for a POC roster; production scopes the gallery per section and can use a vector index.
 - This standalone service maps directly onto the planned production `face-service`; the MongoDB
