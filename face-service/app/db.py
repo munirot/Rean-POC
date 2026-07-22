@@ -114,6 +114,30 @@ class Store:
             return raw.get("CurCrID") in scope["courses"]
         return True  # admin
 
+    @staticmethod
+    def _scope_student_query(scope):
+        """Mongo filter fragment limiting the students collection to a scope."""
+        if not scope:
+            return {}
+        f = {"InId": scope["InId"]}
+        if scope["type"] == "student":
+            f["$or"] = [{"StuID": scope["sid"]}, {"CmStudID": scope["sid"]}]
+        elif scope["type"] == "staff" and scope.get("courses") is not None:
+            f["CurCrID"] = {"$in": sorted(scope["courses"])}
+        return f
+
+    @staticmethod
+    def _scope_attn_query(scope):
+        """Mongo filter fragment limiting the attendance collection to a scope."""
+        if not scope:
+            return {}
+        f = {"InId": scope["InId"]}
+        if scope["type"] == "student":
+            f["StuID"] = scope["sid"]
+        elif scope["type"] == "staff" and scope.get("courses") is not None:
+            f["CrID"] = {"$in": sorted(scope["courses"])}
+        return f
+
     def ensure_index(self):
         if not self._indexed:
             self.emb.create_index([("StuID", ASCENDING)], unique=True)
@@ -138,10 +162,11 @@ class Store:
     def _emb_map(self):
         return {e["StuID"]: e for e in self.emb.find({}, {"emb": 0})}
 
-    def list_students(self):
+    def list_students(self, scope=None):
         embs = self._emb_map()
         out = []
-        for s in self.students.find({"StFl": {"$ne": "I"}}):
+        query = {"StFl": {"$ne": "I"}, **self._scope_student_query(scope)}
+        for s in self.students.find(query):
             sid = _student_sid(s)
             e = embs.get(sid)
             out.append({
@@ -402,19 +427,26 @@ class Store:
                 "status": d.get("status"), "similarity": d.get("similarity"),
                 "ts": ts.isoformat() if isinstance(ts, datetime) else ts}
 
-    def list_attendance(self, date=None, cls=None, session=None, sid=None, limit=1000):
-        q = {}
+    def list_attendance(self, date=None, cls=None, session=None, sid=None, limit=1000,
+                         scope=None):
+        q = dict(self._scope_attn_query(scope))   # InId + (StuID|CrID) scope
         if date:
             q["date"] = date
         if session:
             q["session"] = session
         if sid:
             q["StuID"] = sid
-        # resolve class name -> CrID(s) for filtering
+        # CrID may come from both the class filter and the staff scope — intersect.
+        crid_sets = []
         if cls:
             course_crids = self._crids_for_class(cls)
             if course_crids:
-                q["CrID"] = {"$in": course_crids}
+                crid_sets.append(set(course_crids))
+        if "CrID" in q and isinstance(q["CrID"], dict) and "$in" in q["CrID"]:
+            crid_sets.append(set(q["CrID"]["$in"]))
+        if crid_sets:
+            inter = set.intersection(*crid_sets) if len(crid_sets) > 1 else crid_sets[0]
+            q["CrID"] = {"$in": sorted(inter)}
         cur = self.attn.find(q).sort("CrAt", DESCENDING).limit(limit)
         return [self._attn_public(d) for d in cur]
 
@@ -424,11 +456,11 @@ class Store:
                                   {"_id": 0, "CurCrID": 1})
         return sorted({s.get("CurCrID") for s in sids if s.get("CurCrID")})
 
-    def attendance_roster(self, date=None, cls=None, session=None):
+    def attendance_roster(self, date=None, cls=None, session=None, scope=None):
         """For a date, every student + whether they've registered attendance yet.
         checkedIn = has a Present/Late record; else 'not yet'."""
         date = date or self._today()
-        q = {"date": date}
+        q = {"date": date, **self._scope_attn_query(scope)}
         if session:
             q["session"] = session
         recs = {}
@@ -438,7 +470,7 @@ class Store:
             if prev is None or (r.get("status") in ("P", "L") and prev.get("status") == "A"):
                 recs[r["StuID"]] = r
         out = []
-        for s in self.students.find({"StFl": {"$ne": "I"}}):
+        for s in self.students.find({"StFl": {"$ne": "I"}, **self._scope_student_query(scope)}):
             sid = _student_sid(s)
             cls_name = _student_class(s)
             if cls and cls_name != cls:
@@ -467,12 +499,16 @@ class Store:
             return False
         return self.attn.delete_one({"_id": oid}).deleted_count > 0
 
-    def attendance_summary(self, date=None):
+    def attendance_summary(self, date=None, scope=None):
         date = date or self._today()
-        present_sids = set(self.attn.distinct("StuID", {"date": date, "status": "P"}))
-        total = self.count()
+        attn_scope = self._scope_attn_query(scope)
+        stu_scope = self._scope_student_query(scope)
+        present_sids = set(self.attn.distinct(
+            "StuID", {"date": date, "status": "P", **attn_scope}))
+        stu_query = {"StFl": {"$ne": "I"}, **stu_scope}
+        total = self.students.count_documents(stu_query)
         by_class = {}
-        for s in self.students.find({"StFl": {"$ne": "I"}},
+        for s in self.students.find(stu_query,
                                     {"_id": 0, "StuID": 1, "CmStudID": 1, "CurCrNm": 1, "CurCrCd": 1}):
             c = s.get("CurCrNm") or s.get("CurCrCd") or "—"
             by_class.setdefault(c, {"cls": c, "total": 0, "present": 0})
@@ -486,7 +522,7 @@ class Store:
             "present": len(present_sids),
             "absent": max(0, total - len(present_sids)),
             "by_class": sorted(by_class.values(), key=lambda x: x["cls"]),
-            "sessions": sorted(x for x in self.attn.distinct("session", {"date": date}) if x),
+            "sessions": sorted(x for x in self.attn.distinct("session", {"date": date, **attn_scope}) if x),
         }
 
 

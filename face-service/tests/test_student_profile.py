@@ -147,6 +147,37 @@ def test_student_sees_only_self():
     assert Store.can_view_student(scope, _stu(sid="S2")) is False
 
 
+# --------------------------------------------------------------------------- #
+# scope query builders (Mongo filter fragments)
+# --------------------------------------------------------------------------- #
+def test_scope_student_query_admin_is_institute_only():
+    scope = {"InId": "IN001", "type": "admin", "sid": None, "courses": None}
+    assert Store._scope_student_query(scope) == {"InId": "IN001"}
+
+
+def test_scope_student_query_staff_limits_courses():
+    scope = {"InId": "IN001", "type": "staff", "sid": None, "courses": {"CR001", "CR002"}}
+    q = Store._scope_student_query(scope)
+    assert q["InId"] == "IN001"
+    assert set(q["CurCrID"]["$in"]) == {"CR001", "CR002"}
+
+
+def test_scope_student_query_student_limits_to_self():
+    scope = {"InId": "IN001", "type": "student", "sid": "S1", "courses": None}
+    q = Store._scope_student_query(scope)
+    assert {"StuID": "S1"} in q["$or"]
+
+
+def test_scope_attn_query_student_forces_sid():
+    scope = {"InId": "IN001", "type": "student", "sid": "S1", "courses": None}
+    assert Store._scope_attn_query(scope) == {"InId": "IN001", "StuID": "S1"}
+
+
+def test_scope_attn_query_none_is_empty():
+    assert Store._scope_attn_query(None) == {}
+    assert Store._scope_student_query(None) == {}
+
+
 if __name__ == "__main__":
     import pytest
     raise SystemExit(pytest.main([__file__, "-v"]))
