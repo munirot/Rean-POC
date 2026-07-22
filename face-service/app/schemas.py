@@ -135,3 +135,8 @@ class AttendanceSummary(BaseModel):
     absent: int
     by_class: List[ClassSummary]
     sessions: List[str]
+
+
+class ChatRequest(BaseModel):
+    message: str
+    sid: Optional[str] = None   # optional student currently on screen, for context

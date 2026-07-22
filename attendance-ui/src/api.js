@@ -34,6 +34,10 @@ export const api = {
   studentStats: (sid) => j(`/api/students/${sid}/stats`),
   studentProfileFull: (sid) => j(`/api/students/${sid}/profile/full`),
   cohort: (cls) => j(`/api/analytics/cohort?cls=${encodeURIComponent(cls)}`),
+  chat: (message, sid) => j('/api/chat', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message, sid }),
+  }),
   enroll: (sid, fileOrBlob, name = 'photo.jpg') => {
     const fd = new FormData()
     fd.append('file', fileOrBlob, name)

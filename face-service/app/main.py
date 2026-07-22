@@ -29,10 +29,11 @@ from .config import settings
 from .db import get_store
 from . import engine as eng
 from . import antispoof as anti
+from . import chat as chatmod
 import base64
 from .schemas import (Health, Student, EnrollResult, RecognizeResult,
                       MarkRequest, MarkResult, AttendanceRecord, AttendanceSummary,
-                      Institute, LoginRequest, AuthUser)
+                      Institute, LoginRequest, AuthUser, ChatRequest)
 
 WEB_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "web")
 
@@ -107,26 +108,6 @@ def login(req: LoginRequest):
     return AuthUser(ok=True, token=token, **user)
 
 
-@app.get("/api/students", response_model=list[Student])
-def list_students():
-    return get_store().list_students()
-
-
-@app.get("/api/students/{sid}/profile")
-def get_student_profile(sid: str):
-    s = get_store().get_student_full(sid)
-    if not s:
-        raise HTTPException(404, f"Unknown student {sid}")
-    return s
-
-
-@app.get("/api/students/{sid}/stats")
-def get_student_stats(sid: str):
-    if not get_store().get(sid):
-        raise HTTPException(404, f"Unknown student {sid}")
-    return get_store().student_stats(sid)
-
-
 def current_user(authorization: Optional[str] = Header(None)) -> dict:
     """Decode the session token (base64 'loginId:type'), load the login, and
     return the authorization scope used to filter data. Raises 401 if invalid."""
@@ -141,6 +122,38 @@ def current_user(authorization: Optional[str] = Header(None)) -> dict:
     if not scope:
         raise HTTPException(401, "Unknown session")
     return scope
+
+
+def require_staff(user: dict) -> dict:
+    """Guard for admin/staff-only actions (enrollment, marking, deletes)."""
+    if user.get("type") not in ("admin", "staff"):
+        raise HTTPException(403, "Staff or admin role required")
+    return user
+
+
+@app.get("/api/students", response_model=list[Student])
+def list_students(user: dict = Depends(current_user)):
+    return get_store().list_students(scope=user)
+
+
+@app.get("/api/students/{sid}/profile")
+def get_student_profile(sid: str, user: dict = Depends(current_user)):
+    rec = get_store().get(sid)
+    if not rec:
+        raise HTTPException(404, f"Unknown student {sid}")
+    if not get_store().can_view_student(user, rec["raw"]):
+        raise HTTPException(403, "Not permitted to view this student")
+    return get_store().get_student_full(sid)
+
+
+@app.get("/api/students/{sid}/stats")
+def get_student_stats(sid: str, user: dict = Depends(current_user)):
+    rec = get_store().get(sid)
+    if not rec:
+        raise HTTPException(404, f"Unknown student {sid}")
+    if not get_store().can_view_student(user, rec["raw"]):
+        raise HTTPException(403, "Not permitted to view this student")
+    return get_store().student_stats(sid)
 
 
 @app.get("/api/students/{sid}/profile/full")
@@ -161,20 +174,33 @@ def get_cohort_signals(cls: str, user: dict = Depends(current_user)):
     return get_store().cohort_signals(cls, scope=user)
 
 
+@app.post("/api/chat")
+def chat(req: ChatRequest, user: dict = Depends(current_user)):
+    """Grounded staff chat over attendance + assignments, scoped to the caller.
+    Staff/admin only — students use their own dashboard."""
+    require_staff(user)
+    return chatmod.answer(get_store(), req.message, scope=user, context_sid=req.sid)
+
+
 @app.post("/api/students/seed")
-def seed(force: bool = False):
+def seed(force: bool = False, user: dict = Depends(current_user)):
+    if user.get("type") != "admin":
+        raise HTTPException(403, "Admin role required")
     get_store().seed(force=force)
     return {"ok": True, "students": get_store().count()}
 
 
 @app.post("/api/students/reset")
-def reset():
+def reset(user: dict = Depends(current_user)):
+    if user.get("type") != "admin":
+        raise HTTPException(403, "Admin role required")
     get_store().clear_all_embeddings()
     return {"ok": True, "enrolled": get_store().enrolled_count()}
 
 
 @app.post("/api/students/{sid}/enroll", response_model=EnrollResult)
-async def enroll(sid: str, file: UploadFile = File(...)):
+async def enroll(sid: str, file: UploadFile = File(...), user: dict = Depends(current_user)):
+    require_staff(user)
     store = get_store()
     student = store.get(sid)
     if not student:
@@ -209,7 +235,8 @@ async def enroll(sid: str, file: UploadFile = File(...)):
 
 
 @app.delete("/api/students/{sid}/enroll")
-def unenroll(sid: str):
+def unenroll(sid: str, user: dict = Depends(current_user)):
+    require_staff(user)
     if not get_store().clear_embedding(sid):
         raise HTTPException(404, f"Unknown student {sid}")
     return {"ok": True, "sid": sid}
@@ -217,7 +244,8 @@ def unenroll(sid: str):
 
 @app.post("/api/recognize", response_model=RecognizeResult)
 async def recognize(file: UploadFile = File(...), threshold: Optional[float] = Form(None),
-                    source: Optional[str] = Form(None)):
+                    source: Optional[str] = Form(None), user: dict = Depends(current_user)):
+    # Any authenticated user (staff kiosk or student self-service) may recognize.
     store = get_store()
     engine = _engine_or_503()
     img = engine.decode(await file.read())
@@ -256,7 +284,8 @@ async def recognize(file: UploadFile = File(...), threshold: Optional[float] = F
 
 # ---- attendance ------------------------------------------------------------
 @app.post("/api/attendance", response_model=MarkResult)
-def mark_attendance(req: MarkRequest):
+def mark_attendance(req: MarkRequest, user: dict = Depends(current_user)):
+    # Any authenticated user may mark (kiosk or self-service); anonymous is blocked.
     record, created = get_store().mark_attendance(
         req.sid, session=req.session, source=req.source or "kiosk",
         similarity=req.similarity, date=req.date)
@@ -268,26 +297,28 @@ def mark_attendance(req: MarkRequest):
 
 @app.get("/api/attendance", response_model=list[AttendanceRecord])
 def list_attendance(date: Optional[str] = None, cls: Optional[str] = None,
-                    session: Optional[str] = None, sid: Optional[str] = None):
-    return get_store().list_attendance(date=date, cls=cls, session=session, sid=sid)
+                    session: Optional[str] = None, sid: Optional[str] = None,
+                    user: dict = Depends(current_user)):
+    return get_store().list_attendance(date=date, cls=cls, session=session, sid=sid, scope=user)
 
 
 @app.delete("/api/attendance/{record_id}")
-def delete_attendance(record_id: str):
+def delete_attendance(record_id: str, user: dict = Depends(current_user)):
+    require_staff(user)
     if not get_store().delete_attendance(record_id):
         raise HTTPException(404, "Record not found")
     return {"ok": True}
 
 
 @app.get("/api/attendance/summary", response_model=AttendanceSummary)
-def attendance_summary(date: Optional[str] = None):
-    return get_store().attendance_summary(date=date)
+def attendance_summary(date: Optional[str] = None, user: dict = Depends(current_user)):
+    return get_store().attendance_summary(date=date, scope=user)
 
 
 @app.get("/api/attendance/roster")
 def attendance_roster(date: Optional[str] = None, cls: Optional[str] = None,
-                      session: Optional[str] = None):
-    return get_store().attendance_roster(date=date, cls=cls, session=session)
+                      session: Optional[str] = None, user: dict = Depends(current_user)):
+    return get_store().attendance_roster(date=date, cls=cls, session=session, scope=user)
 
 
 def _engine_or_503():

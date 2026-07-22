@@ -27,6 +27,15 @@ class Settings:
     missing_assign_min: int = int(_get("SIGNAL_MISSING_MIN", "2"))
     quiz_low_avg: float = float(_get("SIGNAL_QUIZ_LOW", "60"))
 
+    # Staff chat (OpenAI-compatible LLM). Default = local Ollama so no student
+    # data leaves the machine. Point CHAT_BASE_URL at OpenRouter/Groq/etc. to swap.
+    chat_enabled: bool = _get("CHAT_ENABLED", "true").lower() == "true"
+    chat_base_url: str = _get("CHAT_BASE_URL", "http://localhost:11434/v1")
+    chat_model: str = _get("CHAT_MODEL", "qwen2.5:7b-instruct")
+    chat_api_key: str = _get("CHAT_API_KEY", "ollama")   # Ollama ignores the value
+    chat_timeout: int = int(_get("CHAT_TIMEOUT", "60"))  # seconds per LLM call
+    chat_row_cap: int = int(_get("CHAT_ROW_CAP", "200")) # max rows a query may read
+
     # InsightFace model
     # buffalo_l = accurate (ArcFace r100, 512-d) · buffalo_s = light/fast
     model_pack: str = _get("MODEL_PACK", "buffalo_l")

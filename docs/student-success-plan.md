@@ -192,3 +192,46 @@ Each phase is independently shippable; value starts at phase 2.
   auto-applied.
 - Read-only DB credentials for the chat path; app write credentials never
   reach the LLM path.
+
+---
+
+## 9. Chat setup (local Ollama — default)
+
+The chat uses any OpenAI-compatible endpoint. The default keeps student data
+on-prem via a local model:
+
+```bash
+# 1. install Ollama (https://ollama.com), then pull a capable instruct model
+ollama pull qwen2.5:7b-instruct        # or deepseek-r1:7b, llama3.1:8b-instruct
+# 2. Ollama serves an OpenAI-compatible API at http://localhost:11434/v1
+```
+
+Config (env, all optional — defaults shown):
+
+```
+CHAT_ENABLED=true
+CHAT_BASE_URL=http://localhost:11434/v1
+CHAT_MODEL=qwen2.5:7b-instruct
+CHAT_API_KEY=ollama          # ignored by Ollama; set a real key for hosted APIs
+CHAT_TIMEOUT=60
+CHAT_ROW_CAP=200
+```
+
+To switch to a hosted free API instead (student data then leaves the machine),
+point `CHAT_BASE_URL` at the provider and set `CHAT_MODEL` / `CHAT_API_KEY`:
+
+- OpenRouter: `https://openrouter.ai/api/v1`, model e.g. `deepseek/deepseek-chat`
+- Groq: `https://api.groq.com/openai/v1`, model e.g. `qwen-2.5-32b`
+
+Safety recap (enforced in `app/chat.py`): the model only returns a validated
+intent, never raw Mongo; the server injects `InId` + course/`sid` scope into
+every query and ignores any attempt to override it; reads are capped at
+`CHAT_ROW_CAP`; the endpoint is staff/admin-only; answers are composed strictly
+from returned rows with the raw data shown for verification.
+
+### Deployment note — read-only DB user
+
+`app/chat.py` only ever issues `find`/`count_documents`, but for defense in
+depth create a read-only Mongo user for the chat path in production and point a
+separate connection at it, so a code change can never turn a chat query into a
+write.
