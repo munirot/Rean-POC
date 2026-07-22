@@ -133,10 +133,12 @@ class AttendanceSummary(BaseModel):
     enrolled: int
     present: int
     absent: int
+    marked: int = 0
     by_class: List[ClassSummary]
     sessions: List[str]
 
 
 class ChatRequest(BaseModel):
     message: str
-    sid: Optional[str] = None   # optional student currently on screen, for context
+    sid: Optional[str] = None             # student currently on screen, for context
+    conversationId: Optional[str] = None  # thread to append to (new one if omitted)

@@ -332,6 +332,60 @@ class Store:
         return {"cls": cls, "total": len(out),
                 "flagged": sum(1 for x in out if x["signals"]), "students": out}
 
+    # -- chat history (per staff member, grouped into conversations) ---------
+    def save_chat(self, scope, role, content, conversation_id, meta=None):
+        """Persist one chat turn keyed to the login + conversation."""
+        self.chat_hist.insert_one({
+            "loginId": scope.get("loginId"), "staffId": scope.get("staffId"),
+            "InId": scope.get("InId"), "conversationId": conversation_id,
+            "role": role, "content": content,
+            "meta": meta, "ts": datetime.now(timezone.utc)})
+
+    def list_conversations(self, scope, limit=50):
+        """One entry per conversation, most-recently-active first. Title = the
+        first user message in that conversation."""
+        pipeline = [
+            {"$match": {"loginId": scope.get("loginId")}},
+            {"$sort": {"ts": ASCENDING}},
+            {"$group": {"_id": "$conversationId",
+                        "title": {"$first": "$content"},
+                        "updatedAt": {"$last": "$ts"},
+                        "count": {"$sum": 1}}},
+            {"$sort": {"updatedAt": DESCENDING}},
+            {"$limit": limit},
+        ]
+        out = []
+        for d in self.chat_hist.aggregate(pipeline):
+            if not d.get("_id"):
+                continue
+            ts = d.get("updatedAt")
+            out.append({"conversationId": d["_id"],
+                        "title": (d.get("title") or "New chat")[:60],
+                        "updatedAt": ts.isoformat() if isinstance(ts, datetime) else ts,
+                        "count": d.get("count", 0)})
+        return out
+
+    def list_chat(self, scope, conversation_id=None, limit=None):
+        """Messages for one conversation (oldest-first). Without an id, returns
+        the caller's most recent turns across all conversations."""
+        limit = limit or settings.chat_history_limit
+        q = {"loginId": scope.get("loginId")}
+        if conversation_id:
+            q["conversationId"] = conversation_id
+        docs = list(self.chat_hist.find(q, {"_id": 0}).sort("ts", DESCENDING).limit(limit))
+        docs.reverse()
+        return [{"role": d.get("role"), "content": d.get("content"),
+                 "data": d.get("meta"), "conversationId": d.get("conversationId"),
+                 "ts": d["ts"].isoformat() if isinstance(d.get("ts"), datetime) else d.get("ts")}
+                for d in docs]
+
+    def clear_chat(self, scope, conversation_id=None):
+        """Delete one conversation, or all of the caller's history if no id."""
+        q = {"loginId": scope.get("loginId")}
+        if conversation_id:
+            q["conversationId"] = conversation_id
+        return self.chat_hist.delete_many(q).deleted_count
+
     def get(self, sid: str):
         s = self.students.find_one({"$or": [{"StuID": sid}, {"CmStudID": sid}]}, {"_id": 0})
         if not s:
