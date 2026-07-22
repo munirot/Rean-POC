@@ -45,6 +45,7 @@ class Store:
         self.institutes = db[settings.institutes_coll]
         self.assignments = db[settings.assignments_coll]
         self.staffs = db[settings.staffs_coll]
+        self.chat_hist = db[settings.chat_history_coll]
         self._indexed = False
 
     def ping(self):
@@ -515,12 +516,14 @@ class Store:
             by_class[c]["total"] += 1
             if _student_sid(s) in present_sids:
                 by_class[c]["present"] += 1
+        marked = self.attn.count_documents({"date": date, **attn_scope})
         return {
             "date": date,
             "total_students": total,
             "enrolled": self.enrolled_count(),
             "present": len(present_sids),
             "absent": max(0, total - len(present_sids)),
+            "marked": marked,   # attendance rows recorded for the day (0 = none taken)
             "by_class": sorted(by_class.values(), key=lambda x: x["cls"]),
             "sessions": sorted(x for x in self.attn.distinct("session", {"date": date, **attn_scope}) if x),
         }

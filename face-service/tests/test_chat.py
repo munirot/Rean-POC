@@ -56,6 +56,29 @@ def test_answer_action_ok():
     assert ok
 
 
+def test_attendance_summary_action_ok():
+    ok, err = chat.validate_intent({"action": "attendance_summary", "date": "today"})
+    assert ok and err is None
+
+
+def test_attendance_summary_routes_to_fixed_function():
+    """'how many absent' must call attendance_summary, not a raw status query."""
+    calls = {}
+
+    class _S:
+        def attendance_summary(self, date=None, scope=None):
+            calls["date"] = date
+            calls["scope"] = scope
+            return {"present": 0, "absent": 30, "marked": 0, "total_students": 30}
+
+    scope = {"InId": "IN001", "type": "staff", "sid": None, "courses": {"CR001"}}
+    out = chat.run_intent(_S(), {"action": "attendance_summary", "date": "today"}, scope)
+    assert out["kind"] == "attendance_summary"
+    assert out["data"]["marked"] == 0        # no attendance recorded
+    assert calls["date"] is None             # 'today' -> store default
+    assert calls["scope"] is scope           # scope forwarded
+
+
 # --------------------------------------------------------------------------- #
 # scope injection — a generated intent can never widen access
 # --------------------------------------------------------------------------- #
@@ -115,6 +138,47 @@ def test_run_intent_injects_scope_and_ignores_inid_override():
     assert q["InId"] == "IN001"      # scope wins
     assert q["StuID"] == "S1"        # student locked to self
     assert q["status"] == "A"        # allowed filter applied
+
+
+# --------------------------------------------------------------------------- #
+# pre-router — attendance questions bypass the LLM entirely
+# --------------------------------------------------------------------------- #
+def test_pre_route_catches_absent_today():
+    intent = chat.pre_route("How many students were absent today?")
+    assert intent == {"action": "attendance_summary", "date": "today"}
+
+
+def test_pre_route_picks_up_explicit_date():
+    intent = chat.pre_route("how many present on 2026-07-20?")
+    assert intent["action"] == "attendance_summary"
+    assert intent["date"] == "2026-07-20"
+
+
+def test_pre_route_ignores_non_attendance():
+    assert chat.pre_route("who is missing assignments in law?") is None
+
+
+# --------------------------------------------------------------------------- #
+# deterministic attendance formatter — 0 is never spun into a positive
+# --------------------------------------------------------------------------- #
+def test_format_attendance_no_records_is_truthful():
+    msg = chat._format_attendance({"date": "2026-07-22", "total_students": 30,
+                                   "present": 0, "absent": 30, "marked": 0})
+    assert "no attendance has been recorded" in msg.lower()
+    assert "30" in msg
+    assert "no one absent" not in msg.lower()
+
+
+def test_format_attendance_empty_scope():
+    msg = chat._format_attendance({"date": "2026-07-22", "total_students": 0,
+                                   "present": 0, "absent": 0, "marked": 0})
+    assert "no students found" in msg.lower()
+
+
+def test_format_attendance_normal_day():
+    msg = chat._format_attendance({"date": "2026-07-22", "total_students": 30,
+                                   "present": 25, "absent": 5, "marked": 25})
+    assert "25 of 30" in msg and "5 absent" in msg
 
 
 if __name__ == "__main__":

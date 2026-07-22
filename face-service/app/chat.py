@@ -17,6 +17,7 @@ The LLM is any OpenAI-compatible endpoint; default is local Ollama so student
 data stays on-prem (see config.chat_*).
 """
 import json
+import re
 import urllib.request
 import urllib.error
 
@@ -30,23 +31,30 @@ ALLOWED = {
     "attendance": {"StuID", "status", "date", "session", "SubID", "CrID"},
     "assignments": {"Catry", "SubID", "CrID", "StaffID"},
 }
-ACTIONS = {"student_profile", "cohort", "query", "answer"}
+ACTIONS = {"student_profile", "cohort", "query", "attendance_summary", "answer"}
 
 SYSTEM_PROMPT = """You are a data assistant for school staff. You do NOT answer \
 from memory — you translate the question into ONE JSON intent that the server \
 runs against the database. Output ONLY valid JSON, no prose.
 
 Intent shapes:
+- Attendance counts for a day (how many present / absent / attendance rate,
+  today or a given date): {"action":"attendance_summary","date":"today"}
+  or {"action":"attendance_summary","date":"2026-07-22"}
 - Look up one student's full record (attendance + grades + risk signals):
   {"action":"student_profile","student":"<name or student id>"}
 - List at-risk students in a class:
   {"action":"cohort","class":"<class/course name>"}
-- Filter/count rows in a collection:
+- Filter/count specific rows (e.g. how many quizzes, records for one student):
   {"action":"query","collection":"attendance"|"assignments",
    "filters":[{"field":"<field>","op":"eq|in|gte|lte","value":<v>}],
    "aggregation":"count"|"list"}
 - If the question is not about attendance or assignments, or you need to reply
   directly: {"action":"answer","text":"<reply>"}
+
+IMPORTANT: For "how many students are present/absent" use attendance_summary —
+NOT a query on status. Absence is implicit (a student with no present record),
+so counting status='A' rows is wrong. Use query only for specific row lookups.
 
 Allowed query fields:
 - attendance: StuID, status (P=present,L=late,A=absent), date (YYYY-MM-DD), session, SubID, CrID
@@ -71,6 +79,27 @@ def _llm(messages, force_json=False):
     with urllib.request.urlopen(req, timeout=settings.chat_timeout) as r:
         data = json.loads(r.read().decode())
     return data["choices"][0]["message"]["content"]
+
+
+# --------------------------------------------------------------------------- #
+# Deterministic pre-router: catch common, error-prone questions BEFORE the LLM.
+# Attendance-count questions must never be answered by a raw status query, so we
+# force them to the summary function here rather than trusting the model to pick.
+# --------------------------------------------------------------------------- #
+_DATE_RE = re.compile(r"\b(\d{4}-\d{2}-\d{2})\b")
+_ATTN_WORDS = ("absent", "present", "attendance", "attended", "turnout",
+               "how many showed", "who showed up", "checked in", "check-in")
+
+
+def pre_route(question):
+    """Return an intent dict for questions we can route deterministically, else None."""
+    q = question.lower()
+    if any(w in q for w in _ATTN_WORDS) and any(
+            k in q for k in ("how many", "count", "number of", "today", "attendance",
+                             "were", "are", "rate", "on ")):
+        m = _DATE_RE.search(question)
+        return {"action": "attendance_summary", "date": m.group(1) if m else "today"}
+    return None
 
 
 def _extract_json(text):
@@ -149,6 +178,13 @@ def run_intent(store, intent, scope):
     if action == "cohort":
         return {"kind": "cohort", "data": store.cohort_signals(intent.get("class", ""), scope=scope)}
 
+    if action == "attendance_summary":
+        date = intent.get("date")
+        if not date or str(date).lower() == "today":
+            date = None   # store defaults to today
+        return {"kind": "attendance_summary",
+                "data": store.attendance_summary(date=date, scope=scope)}
+
     # action == "query"
     coll = intent["collection"]
     base = store._scope_attn_query(scope) if coll == "attendance" else _assignment_scope(scope)
@@ -175,17 +211,48 @@ def _safe(obj):
 # --------------------------------------------------------------------------- #
 # Composition — answer strictly from the returned data
 # --------------------------------------------------------------------------- #
+COMPOSE_SYSTEM = """Answer the staff member's question using ONLY the JSON data \
+provided. Rules:
+- Use exact numbers from the data. Never invent, infer, or extrapolate figures.
+- Answer ONLY what was asked. Do NOT add recommendations, next steps, coaching,
+  or commentary UNLESS the user explicitly asks how to help or improve a student.
+- If the data is empty or a count is 0, say so plainly. Do not spin 0 into a
+  positive ("no one absent") — describe what the data actually shows.
+- For attendance summaries: 'present' is students marked present; 'absent' is
+  everyone else in the roster; 'marked'/'records' is how many attendance rows
+  exist. If records is 0, state clearly that no attendance has been recorded for
+  that day yet — do not imply everyone attended or no one was absent.
+- If results are limited to the staff member's own classes, you may note that.
+- Be concise: 1–3 sentences for simple questions."""
+
+
+def _format_attendance(data):
+    """Compose the attendance answer in code — never via the LLM — so a 0 can
+    never be spun into a positive. Truthful about empty scope / no records."""
+    date = data.get("date")
+    total = data.get("total_students", 0)
+    present = data.get("present", 0)
+    absent = data.get("absent", 0)
+    marked = data.get("marked", 0)
+    if total == 0:
+        return f"No students found in your classes for {date}."
+    if marked == 0:
+        return (f"On {date}, no attendance has been recorded yet: 0 of {total} "
+                f"students are marked present, so all {total} are currently "
+                f"unmarked (counted as absent).")
+    return (f"On {date}: {present} of {total} students present, {absent} absent "
+            f"({marked} attendance record{'s' if marked != 1 else ''} logged).")
+
+
 def _compose(question, result):
     if result["kind"] in ("answer", "not_found"):
         return result["text"]
+    # Attendance counts are answered deterministically, not by the model.
+    if result["kind"] == "attendance_summary":
+        return _format_attendance(result["data"])
     context = json.dumps(result, default=str)[:6000]
     msgs = [
-        {"role": "system", "content":
-            "Answer the staff member's question using ONLY the JSON data provided. "
-            "Cite concrete numbers from the data. If the data does not answer it, "
-            "say so. Never invent figures. Keep it concise. When suggesting how to "
-            "help a student, frame it as suggestions for the teacher to consider, "
-            "grounded in the signals shown."},
+        {"role": "system", "content": COMPOSE_SYSTEM},
         {"role": "user", "content": f"Question: {question}\n\nData:\n{context}"},
     ]
     return _llm(msgs)
@@ -201,6 +268,13 @@ def answer(store, question, scope, context_sid=None):
         return {"answer": "Chat is disabled on this server.", "intent": None, "data": None}
     if context_sid:
         question = f"(current student on screen: {context_sid})\n{question}"
+
+    # Deterministic shortcut for attendance-count questions — skip the LLM's
+    # intent step entirely so it can't mis-route to a raw status query.
+    routed = pre_route(question)
+    if routed is not None:
+        result = run_intent(store, routed, scope)
+        return {"answer": _compose(question, result), "intent": routed, "data": result}
 
     try:
         raw = _llm([{"role": "system", "content": SYSTEM_PROMPT},
