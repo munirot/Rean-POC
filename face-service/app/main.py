@@ -18,6 +18,7 @@ origin (http://localhost:8000), which also satisfies the browser's secure-contex
 requirement for live camera access.
 """
 import os
+import uuid
 from typing import Optional
 from contextlib import asynccontextmanager
 
@@ -177,9 +178,35 @@ def get_cohort_signals(cls: str, user: dict = Depends(current_user)):
 @app.post("/api/chat")
 def chat(req: ChatRequest, user: dict = Depends(current_user)):
     """Grounded staff chat over attendance + assignments, scoped to the caller.
-    Staff/admin only — students use their own dashboard."""
+    Staff/admin only — students use their own dashboard. Persists history."""
     require_staff(user)
-    return chatmod.answer(get_store(), req.message, scope=user, context_sid=req.sid)
+    store = get_store()
+    conv = req.conversationId or uuid.uuid4().hex
+    result = chatmod.answer(store, req.message, scope=user, context_sid=req.sid)
+    # Persist both turns so the conversation survives page reloads.
+    store.save_chat(user, "user", req.message, conv)
+    store.save_chat(user, "assistant", result.get("answer", ""), conv, meta=result.get("data"))
+    result["conversationId"] = conv
+    return result
+
+
+@app.get("/api/chat/conversations")
+def chat_conversations(user: dict = Depends(current_user)):
+    require_staff(user)
+    return get_store().list_conversations(user)
+
+
+@app.get("/api/chat/history")
+def chat_history(conversationId: Optional[str] = None, user: dict = Depends(current_user)):
+    require_staff(user)
+    return get_store().list_chat(user, conversation_id=conversationId)
+
+
+@app.delete("/api/chat/history")
+def clear_chat_history(conversationId: Optional[str] = None, user: dict = Depends(current_user)):
+    """Delete one conversation (conversationId given) or all history (omitted)."""
+    require_staff(user)
+    return {"ok": True, "deleted": get_store().clear_chat(user, conversation_id=conversationId)}
 
 
 @app.post("/api/students/seed")

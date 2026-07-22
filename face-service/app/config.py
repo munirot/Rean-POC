@@ -35,6 +35,8 @@ class Settings:
     chat_api_key: str = _get("CHAT_API_KEY", "ollama")   # Ollama ignores the value
     chat_timeout: int = int(_get("CHAT_TIMEOUT", "60"))  # seconds per LLM call
     chat_row_cap: int = int(_get("CHAT_ROW_CAP", "200")) # max rows a query may read
+    chat_history_coll: str = _get("FACE_CHAT_HISTORY_COLL", "chat_history")
+    chat_history_limit: int = int(_get("CHAT_HISTORY_LIMIT", "100"))  # msgs returned
 
     # InsightFace model
     # buffalo_l = accurate (ArcFace r100, 512-d) · buffalo_s = light/fast

@@ -34,10 +34,16 @@ export const api = {
   studentStats: (sid) => j(`/api/students/${sid}/stats`),
   studentProfileFull: (sid) => j(`/api/students/${sid}/profile/full`),
   cohort: (cls) => j(`/api/analytics/cohort?cls=${encodeURIComponent(cls)}`),
-  chat: (message, sid) => j('/api/chat', {
+  chat: (message, conversationId, sid) => j('/api/chat', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ message, sid }),
+    body: JSON.stringify({ message, conversationId, sid }),
   }),
+  chatConversations: () => j('/api/chat/conversations'),
+  chatHistory: (conversationId) => j('/api/chat/history' +
+    (conversationId ? `?conversationId=${encodeURIComponent(conversationId)}` : '')),
+  clearChat: (conversationId) => j('/api/chat/history' +
+    (conversationId ? `?conversationId=${encodeURIComponent(conversationId)}` : ''),
+    { method: 'DELETE' }),
   enroll: (sid, fileOrBlob, name = 'photo.jpg') => {
     const fd = new FormData()
     fd.append('file', fileOrBlob, name)
