@@ -36,6 +36,63 @@ The service now reads the **real migrated collections** in `rean_face_poc`:
 Load the data first with `../sample-data/seed_sample_data.py`. Collection names are overridable
 via env (see `.env.example`).
 
+## Share the seeded database with your team
+
+So teammates don't have to re-seed, share one snapshot of the `rean_face_poc` database. Each
+teammate restores it into **their own** local Mongo container — everyone starts from identical
+data, but the copies are independent (one person's edits don't affect anyone else's; re-share a
+new snapshot when the canonical data changes).
+
+> **Gotcha:** the root user lives in Mongo's `admin` database, so dump/restore commands **must**
+> include `?authSource=admin` in the URI. Without it you get
+> `AuthenticationFailed ... SCRAM-SHA-1` even though the password is correct — `mongodump --db`
+> otherwise tries to authenticate against `rean_face_poc`, where the user doesn't exist.
+
+**Maintainer — publish a snapshot** (`my-mongodb` is the container name; swap in yours):
+
+```bash
+docker exec my-mongodb mongodump \
+  --uri="mongodb://admin:mysecurepassword@localhost:27017/?authSource=admin" \
+  --db=rean_face_poc --archive=/tmp/rean.archive --gzip
+docker cp my-mongodb:/tmp/rean.archive ./rean_face_poc.archive
+```
+
+Share `rean_face_poc.archive` (shared drive / S3; or git-LFS to version it with the repo — don't
+commit the raw binary without LFS). Check `ls -lh ./rean_face_poc.archive` first: the
+`face_embeddings` collection holds 512-d vectors, so it can get large.
+
+**Teammate — restore the snapshot.** With a local Mongo running (same creds as below) and
+`rean_face_poc.archive` in the current folder:
+
+```bash
+# 1. start a local Mongo if you don't have one (creds must match the archive's URI)
+docker run -d --name rean-mongo \
+  -e MONGO_INITDB_ROOT_USERNAME=admin -e MONGO_INITDB_ROOT_PASSWORD=mysecurepassword \
+  -v rean-mongo-data:/data/db -p 27017:27017 mongo:latest
+
+# 2. copy the archive into the container, then restore
+docker cp ./rean_face_poc.archive rean-mongo:/tmp/rean.archive
+docker exec rean-mongo mongorestore \
+  --uri="mongodb://admin:mysecurepassword@localhost:27017/?authSource=admin" \
+  --archive=/tmp/rean.archive --gzip --drop
+```
+
+`--drop` clears each collection before loading, so restores are repeatable (a re-run resets to
+the snapshot instead of duplicating docs) — but it **overwrites the teammate's local changes** to
+those collections. Verify with:
+
+```bash
+docker exec rean-mongo mongosh \
+  "mongodb://admin:mysecurepassword@localhost:27017/rean_face_poc?authSource=admin" \
+  --quiet --eval 'db.students.countDocuments()'
+```
+
+A non-zero count means the data loaded. No `.env` change is needed — the default
+`MONGO_URI` already targets `localhost:27017`. If a teammate names their container something
+other than `rean-mongo`, or uses different credentials, adjust the name and URI in all commands
+to match. (For a single **shared, live** database instead of per-person copies, host Mongo on
+Atlas or a VM and point everyone's `MONGO_URI` at it.)
+
 ## Prerequisites
 
 - **Python 3.9–3.11**
