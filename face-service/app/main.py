@@ -31,6 +31,7 @@ from .db import get_store
 from . import engine as eng
 from . import antispoof as anti
 from . import chat as chatmod
+from . import plan as planmod
 import base64
 from .schemas import (Health, Student, EnrollResult, RecognizeResult,
                       MarkRequest, MarkResult, AttendanceRecord, AttendanceSummary,
@@ -168,6 +169,18 @@ def get_student_profile_full(sid: str, user: dict = Depends(current_user)):
     return get_store().student_profile(sid)
 
 
+@app.get("/api/students/{sid}/plan")
+def get_student_plan(sid: str, user: dict = Depends(current_user)):
+    """Teacher-facing improvement suggestions grounded in the student's signals.
+    Deterministic — never auto-applied to the student."""
+    rec = get_store().get(sid)
+    if not rec:
+        raise HTTPException(404, f"Unknown student {sid}")
+    if not get_store().can_view_student(user, rec["raw"]):
+        raise HTTPException(403, "Not permitted to view this student")
+    return planmod.build_plan(get_store().student_profile(sid))
+
+
 @app.get("/api/analytics/cohort")
 def get_cohort_signals(cls: str, user: dict = Depends(current_user)):
     """Every student in a class label + their at-risk signals (flagged first).
@@ -182,10 +195,13 @@ def chat(req: ChatRequest, user: dict = Depends(current_user)):
     require_staff(user)
     store = get_store()
     conv = req.conversationId or uuid.uuid4().hex
-    result = chatmod.answer(store, req.message, scope=user, context_sid=req.sid)
+    # Prior turns for this conversation give the model context for follow-ups.
+    history = store.list_chat(user, conversation_id=conv)
+    result = chatmod.answer(store, req.message, scope=user, context_sid=req.sid,
+                            history=history)
     # Persist both turns so the conversation survives page reloads.
     store.save_chat(user, "user", req.message, conv)
-    store.save_chat(user, "assistant", result.get("answer", ""), conv, meta=result.get("data"))
+    store.save_chat(user, "assistant", result.get("answer", ""), conv)
     result["conversationId"] = conv
     return result
 

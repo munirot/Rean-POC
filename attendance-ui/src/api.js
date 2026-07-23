@@ -33,6 +33,7 @@ export const api = {
   studentProfile: (sid) => j(`/api/students/${sid}/profile`),
   studentStats: (sid) => j(`/api/students/${sid}/stats`),
   studentProfileFull: (sid) => j(`/api/students/${sid}/profile/full`),
+  studentPlan: (sid) => j(`/api/students/${sid}/plan`),
   cohort: (cls) => j(`/api/analytics/cohort?cls=${encodeURIComponent(cls)}`),
   chat: (message, conversationId, sid) => j('/api/chat', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },

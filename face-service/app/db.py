@@ -547,6 +547,21 @@ class Store:
                 "not_yet": len(out) - checked, "total": len(out),
                 "sessions": sorted(x for x in self.attn.distinct("session", {"date": date}) if x)}
 
+    def attendance_range(self, start, end, scope=None):
+        """Attendance aggregates over a date range [start, end] (YYYY-MM-DD),
+        scoped to the caller. Used for 'last week / this month' questions."""
+        attn_scope = self._scope_attn_query(scope)
+        base = {"date": {"$gte": start, "$lte": end}, **attn_scope}
+        records = self.attn.count_documents(base)
+        present_records = self.attn.count_documents({**base, "status": "P"})
+        distinct_present = len(self.attn.distinct("StuID", {**base, "status": "P"}))
+        days = len(self.attn.distinct("date", base))
+        total = self.students.count_documents(
+            {"StFl": {"$ne": "I"}, **self._scope_student_query(scope)})
+        return {"start": start, "end": end, "records": records,
+                "present_records": present_records, "distinct_present": distinct_present,
+                "days": days, "total_students": total}
+
     def delete_attendance(self, record_id):
         try:
             oid = ObjectId(record_id)

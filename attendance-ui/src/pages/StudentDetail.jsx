@@ -49,6 +49,55 @@ function Metric({ label, value, sub }) {
   )
 }
 
+// Teacher-facing improvement suggestions — loaded on demand, never auto-applied.
+function ImprovementPlan({ sid }) {
+  const [plan, setPlan] = useState(null)
+  const [busy, setBusy] = useState(false)
+
+  async function generate() {
+    setBusy(true)
+    try { setPlan(await api.studentPlan(sid)) } catch { setPlan(null) } finally { setBusy(false) }
+  }
+
+  return (
+    <Card className="mb-4">
+      <Card.Header className="d-flex justify-content-between align-items-center">
+        <span>Improvement suggestions</span>
+        <Button variant="secondary" icon="lightbulb" disabled={busy} onClick={generate}>
+          {busy ? 'Generating…' : plan ? 'Refresh' : 'Generate'}
+        </Button>
+      </Card.Header>
+      <Card.Body>
+        {!plan && !busy && (
+          <p className="text-secondary mb-0">
+            Generate suggestions based on this student's attendance and assignment signals.
+          </p>
+        )}
+        {plan && (
+          <>
+            <p className="fw-semibold text-primary">{plan.summary}</p>
+            {plan.suggestions.length === 0 ? (
+              <p className="text-secondary mb-0">No concerns flagged — nothing to suggest right now.</p>
+            ) : (
+              plan.suggestions.map((s, i) => (
+                <div key={i} className="mb-3">
+                  <div className="fw-semibold">
+                    <Badge bg="secondary" className="me-2">{s.area}</Badge>{s.observation}
+                  </div>
+                  <ul className="mb-0 mt-1">
+                    {s.actions.map((a, k) => <li key={k} className="text-secondary">{a}</li>)}
+                  </ul>
+                </div>
+              ))
+            )}
+            <div className="text-secondary fs-2 mt-2">{plan.disclaimer}</div>
+          </>
+        )}
+      </Card.Body>
+    </Card>
+  )
+}
+
 function StudentSuccess({ prof }) {
   if (!prof) return null
   const { attendance: a, academics: ac, signals } = prof
@@ -157,6 +206,9 @@ export default function StudentDetail() {
 
       {/* student-success profile */}
       <StudentSuccess prof={prof} />
+
+      {/* teacher-facing improvement suggestions */}
+      <ImprovementPlan sid={s.sid} />
 
       {/* face profile card */}
       <Card>
