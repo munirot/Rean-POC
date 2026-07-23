@@ -207,6 +207,11 @@ body {
   color: var(--royal);
   font-weight: 600;
 }
+.chat_active {
+  background: var(--sidenav-active-bg);
+  color: var(--royal);
+  font-weight: 600;
+}
 .side-foot {
   padding: 10px 14px;
   font-size: 10.5px;

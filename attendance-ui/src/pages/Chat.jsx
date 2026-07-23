@@ -14,26 +14,6 @@ const SUGGESTIONS = [
 const newId = () =>
   (window.crypto?.randomUUID?.() || `c${Date.now()}${Math.random().toString(16).slice(2)}`)
 
-// Collapsible "show the data" panel so staff can verify the numbers.
-function Evidence({ data }) {
-  const [open, setOpen] = useState(false)
-  if (!data) return null
-  return (
-    <div className="mt-2">
-      <span className="text-secondary fs-2" style={{ cursor: 'pointer' }}
-        onClick={() => setOpen((v) => !v)}>
-        {open ? '▾ hide data' : '▸ show data'}
-      </span>
-      {open && (
-        <pre className="fs-2 mt-1 p-2" style={{
-          background: 'var(--bs-tertiary-bg, #f5f5f5)', borderRadius: 6,
-          maxHeight: 260, overflow: 'auto', whiteSpace: 'pre-wrap',
-        }}>{JSON.stringify(data, null, 2)}</pre>
-      )}
-    </div>
-  )
-}
-
 function Bubble({ m }) {
   const mine = m.role === 'user'
   return (
@@ -43,7 +23,6 @@ function Bubble({ m }) {
           style={mine ? { background: 'var(--primary, #0d6efd)' } : undefined}>
           <div style={{ whiteSpace: 'pre-wrap' }}>{m.content}</div>
           {m.error && <Badge bg="warning" text="dark" className="mt-2">{m.error}</Badge>}
-          {/* {!mine && <Evidence data={m.data} />} */}
         </Card>
       </div>
     </div>
@@ -80,7 +59,7 @@ export default function Chat() {
     setConvId(id)
     try {
       const h = await api.chatHistory(id)
-      setMsgs(h.map((m) => ({ role: m.role, content: m.content, data: m.data })))
+      setMsgs(h.map((m) => ({ role: m.role, content: m.content })))
     } catch { setMsgs([]) }
   }
 
@@ -100,7 +79,7 @@ export default function Chat() {
     try {
       const r = await api.chat(q, convId)
       if (r.conversationId) setConvId(r.conversationId)
-      setMsgs((m) => [...m, { role: 'assistant', content: r.answer, data: r.data, error: r.error }])
+      setMsgs((m) => [...m, { role: 'assistant', content: r.answer, error: r.error }])
       if (isNew) loadConvos()   // surface the new thread in the sidebar
     } catch (e) {
       setMsgs((m) => [...m, { role: 'assistant', content: `Request failed: ${e.message}`, error: 'error' }])
@@ -126,7 +105,7 @@ export default function Chat() {
               {convos.map((c) => (
                 <div key={c.conversationId}
                   onClick={() => selectConv(c.conversationId)}
-                  className={`p-2 mb-1 ${c.conversationId === convId ? 'menu_active' : ''}`}
+                  className={`p-2 mb-1 border-b-1 ${c.conversationId === convId ? 'chat_active' : ''}`}
                   style={{ cursor: 'pointer', borderRadius: 6 }}>
                   <div className="text-primary fs-3 text-truncate">{c.title}</div>
                   <div className="text-secondary fs-2">

@@ -20,6 +20,7 @@ import json
 import re
 import urllib.request
 import urllib.error
+from datetime import date as _date, datetime, timedelta
 
 from .config import settings
 
@@ -31,43 +32,88 @@ ALLOWED = {
     "attendance": {"StuID", "status", "date", "session", "SubID", "CrID"},
     "assignments": {"Catry", "SubID", "CrID", "StaffID"},
 }
-ACTIONS = {"student_profile", "cohort", "query", "attendance_summary", "answer"}
+ACTIONS = {"student_profile", "cohort", "query", "attendance_summary",
+           "attendance_range", "answer"}
 
-SYSTEM_PROMPT = """You are a data assistant for school staff. You do NOT answer \
-from memory — you translate the question into ONE JSON intent that the server \
-runs against the database. Output ONLY valid JSON, no prose.
+SYSTEM_PROMPT = """You help school staff by answering questions about student \
+attendance and assignments. When a question needs data, CALL ONE of the provided \
+tools — never answer data questions from memory or make up numbers. The server \
+runs the tool and gives you the real result to phrase.
 
-Intent shapes:
-- Attendance counts for a day (how many present / absent / attendance rate,
-  today or a given date): {"action":"attendance_summary","date":"today"}
-  or {"action":"attendance_summary","date":"2026-07-22"}
-- Look up one student's full record (attendance + grades + risk signals):
-  {"action":"student_profile","student":"<name or student id>"}
-- List at-risk students in a class:
-  {"action":"cohort","class":"<class/course name>"}
-- Filter/count specific rows (e.g. how many quizzes, records for one student):
-  {"action":"query","collection":"attendance"|"assignments",
-   "filters":[{"field":"<field>","op":"eq|in|gte|lte","value":<v>}],
-   "aggregation":"count"|"list"}
-- If the question is not about attendance or assignments, or you need to reply
-  directly: {"action":"answer","text":"<reply>"}
+Guidance:
+- "how many present/absent", attendance rate, or anything about attendance for a
+  day or period -> get_attendance (pass the period phrase; the server resolves
+  the actual dates, so you never need to compute a date yourself).
+- "how is <student> doing", a student's record -> get_student.
+- "who is at risk / struggling in <class>" -> get_cohort.
+- Specific row lookups (e.g. how many quizzes in a subject) -> search_records.
+- If it is small talk or not about attendance/assignments, just reply directly
+  without calling a tool.
+Call at most one tool. Do not invent fields, students, or figures."""
 
-IMPORTANT: For "how many students are present/absent" use attendance_summary —
-NOT a query on status. Absence is implicit (a student with no present record),
-so counting status='A' rows is wrong. Use query only for specific row lookups.
+# OpenAI-style tool schemas. The model PICKS a tool; the server still resolves
+# dates and injects the caller's scope when it runs the tool (see run_intent).
+TOOLS = [
+    {"type": "function", "function": {
+        "name": "get_attendance",
+        "description": "Attendance figures for a day or a period. Use for present/"
+                       "absent counts and attendance rate.",
+        "parameters": {"type": "object", "properties": {
+            "period": {"type": "string",
+                       "description": "Natural phrase like 'today', 'yesterday', "
+                                      "'last week', 'this month', or a date 'YYYY-MM-DD'."}},
+            "required": []}}},
+    {"type": "function", "function": {
+        "name": "get_student",
+        "description": "One student's full record: attendance, grades, risk signals.",
+        "parameters": {"type": "object", "properties": {
+            "student": {"type": "string", "description": "Student name or ID."}},
+            "required": ["student"]}}},
+    {"type": "function", "function": {
+        "name": "get_cohort",
+        "description": "At-risk students in a class (attendance + assignment signals).",
+        "parameters": {"type": "object", "properties": {
+            "class_name": {"type": "string", "description": "Class or course name."}},
+            "required": ["class_name"]}}},
+    {"type": "function", "function": {
+        "name": "search_records",
+        "description": "Count or list specific rows in attendance or assignments.",
+        "parameters": {"type": "object", "properties": {
+            "collection": {"type": "string", "enum": ["attendance", "assignments"]},
+            "filters": {"type": "array", "items": {"type": "object", "properties": {
+                "field": {"type": "string"}, "op": {"type": "string", "enum": list(OPS)},
+                "value": {}}}},
+            "aggregation": {"type": "string", "enum": ["count", "list"]}},
+            "required": ["collection", "aggregation"]}}},
+]
 
-Allowed query fields:
-- attendance: StuID, status (P=present,L=late,A=absent), date (YYYY-MM-DD), session, SubID, CrID
-- assignments: Catry (Quiz/Homework/Project/Seminar), SubID, CrID, StaffID
-Never invent fields. Prefer student_profile / cohort for "how is X doing" or
-"who is struggling" questions."""
+
+def map_tool_call(name, args):
+    """Map a model tool call to an internal intent (pure). Returns None if the
+    tool name is unknown. run_intent then resolves dates + injects scope."""
+    args = args or {}
+    if name == "get_attendance":
+        return {"action": "attendance_summary", "date": args.get("period") or "today"}
+    if name == "get_student":
+        return {"action": "student_profile", "student": args.get("student", "")}
+    if name == "get_cohort":
+        return {"action": "cohort", "class": args.get("class_name") or args.get("class", "")}
+    if name == "search_records":
+        return {"action": "query", "collection": args.get("collection"),
+                "filters": args.get("filters", []),
+                "aggregation": args.get("aggregation", "count")}
+    return None
 
 
 # --------------------------------------------------------------------------- #
-# LLM call (OpenAI-compatible /chat/completions via stdlib — no extra deps)
+# LLM call (OpenAI-compatible /chat/completions via stdlib — no extra deps).
+# Returns the full assistant message so callers can read tool_calls or content.
 # --------------------------------------------------------------------------- #
-def _llm(messages, force_json=False):
+def _chat_completion(messages, tools=None, force_json=False):
     payload = {"model": settings.chat_model, "messages": messages, "temperature": 0.2}
+    if tools:
+        payload["tools"] = tools
+        payload["tool_choice"] = "auto"
     if force_json:
         payload["response_format"] = {"type": "json_object"}
     req = urllib.request.Request(
@@ -78,27 +124,115 @@ def _llm(messages, force_json=False):
         method="POST")
     with urllib.request.urlopen(req, timeout=settings.chat_timeout) as r:
         data = json.loads(r.read().decode())
-    return data["choices"][0]["message"]["content"]
+    return data["choices"][0]["message"]
+
+
+def _llm(messages, force_json=False):
+    """Plain-text completion (used by the deterministic composer)."""
+    return _chat_completion(messages, force_json=force_json).get("content") or ""
+
+
+def _first_tool_call(message):
+    """Extract (name, args_dict) from an assistant message, or (None, None)."""
+    calls = message.get("tool_calls") or []
+    if not calls:
+        return None, None
+    fn = calls[0].get("function", {})
+    name = fn.get("name")
+    raw = fn.get("arguments")
+    if isinstance(raw, str):
+        try:
+            args = json.loads(raw or "{}")
+        except Exception:
+            args = {}
+    else:
+        args = raw or {}
+    return name, args
 
 
 # --------------------------------------------------------------------------- #
-# Deterministic pre-router: catch common, error-prone questions BEFORE the LLM.
-# Attendance-count questions must never be answered by a raw status query, so we
-# force them to the summary function here rather than trusting the model to pick.
+# Deterministic date handling. The model does NOT know today's date and will
+# hallucinate (e.g. "2023-06-10"), so we resolve every relative period in code
+# against the server clock and never trust the LLM for dates.
 # --------------------------------------------------------------------------- #
 _DATE_RE = re.compile(r"\b(\d{4}-\d{2}-\d{2})\b")
 _ATTN_WORDS = ("absent", "present", "attendance", "attended", "turnout",
                "how many showed", "who showed up", "checked in", "check-in")
+# phrases that, on their own, mean "apply the previous question to this period"
+_PERIOD_WORDS = ("today", "yesterday", "this week", "last week", "past week",
+                 "last 7 days", "previous week", "this month", "last month")
 
 
-def pre_route(question):
-    """Return an intent dict for questions we can route deterministically, else None."""
+def resolve_period(text, today=None):
+    """Resolve a date phrase to a concrete day or range. Returns
+    {"type":"day","date":"YYYY-MM-DD","label":...} or
+    {"type":"range","start":...,"end":...,"label":...} or None."""
+    today = today or _date.today()
+    q = (text or "").lower()
+
+    m = _DATE_RE.search(text or "")
+    if m:
+        return {"type": "day", "date": m.group(1), "label": m.group(1)}
+    if "yesterday" in q:
+        d = today - timedelta(days=1)
+        return {"type": "day", "date": d.isoformat(), "label": "yesterday"}
+    if "today" in q or "so far" in q:
+        return {"type": "day", "date": today.isoformat(), "label": "today"}
+    this_mon = today - timedelta(days=today.weekday())
+    if "this week" in q:
+        return {"type": "range", "start": this_mon.isoformat(),
+                "end": today.isoformat(), "label": "this week"}
+    if "last week" in q or "previous week" in q:
+        last_mon = this_mon - timedelta(days=7)
+        last_sun = this_mon - timedelta(days=1)
+        return {"type": "range", "start": last_mon.isoformat(),
+                "end": last_sun.isoformat(), "label": "last week"}
+    if "past week" in q or "last 7 days" in q or "past 7 days" in q:
+        start = today - timedelta(days=6)
+        return {"type": "range", "start": start.isoformat(),
+                "end": today.isoformat(), "label": "the past 7 days"}
+    if "this month" in q:
+        return {"type": "range", "start": today.replace(day=1).isoformat(),
+                "end": today.isoformat(), "label": "this month"}
+    if "last month" in q:
+        first_this = today.replace(day=1)
+        last_end = first_this - timedelta(days=1)
+        return {"type": "range", "start": last_end.replace(day=1).isoformat(),
+                "end": last_end.isoformat(), "label": "last month"}
+    return None
+
+
+def _period_to_intent(period):
+    if period["type"] == "day":
+        return {"action": "attendance_summary", "date": period["date"], "_label": period["label"]}
+    return {"action": "attendance_range", "start": period["start"],
+            "end": period["end"], "_label": period["label"]}
+
+
+def _prev_was_attendance(history):
+    """Was the most recent user turn an attendance question? (for follow-ups)"""
+    for m in reversed(history or []):
+        if m.get("role") == "user":
+            return any(w in (m.get("content") or "").lower() for w in _ATTN_WORDS)
+    return False
+
+
+def pre_route(question, history=None, today=None):
+    """Return an intent for questions we can route deterministically, else None.
+    Handles follow-ups like "what about last week" by carrying the attendance
+    topic forward from the previous turn."""
     q = question.lower()
-    if any(w in q for w in _ATTN_WORDS) and any(
-            k in q for k in ("how many", "count", "number of", "today", "attendance",
-                             "were", "are", "rate", "on ")):
-        m = _DATE_RE.search(question)
-        return {"action": "attendance_summary", "date": m.group(1) if m else "today"}
+    is_attn = any(w in q for w in _ATTN_WORDS)
+    period = resolve_period(question, today=today)
+    followup = period is not None and any(w in q for w in _PERIOD_WORDS)
+
+    # attendance question with or without an explicit period
+    if is_attn:
+        return _period_to_intent(period) if period else \
+            {"action": "attendance_summary", "date": "today", "_label": "today"}
+    # bare period follow-up continuing an attendance conversation
+    if followup and _prev_was_attendance(history):
+        return _period_to_intent(period)
     return None
 
 
@@ -123,6 +257,10 @@ def validate_intent(intent):
     action = intent.get("action")
     if action not in ACTIONS:
         return False, f"unknown action: {action}"
+    if action == "attendance_range":
+        for k in ("start", "end"):
+            if not _DATE_RE.fullmatch(str(intent.get(k, ""))):
+                return False, f"{k} must be YYYY-MM-DD"
     if action == "query":
         coll = intent.get("collection")
         if coll not in ALLOWED:
@@ -182,8 +320,22 @@ def run_intent(store, intent, scope):
         date = intent.get("date")
         if not date or str(date).lower() == "today":
             date = None   # store defaults to today
-        return {"kind": "attendance_summary",
+        elif not _DATE_RE.fullmatch(str(date)):
+            # resolve any other phrase the LLM may have emitted ("yesterday"/…)
+            p = resolve_period(str(date))
+            if p and p["type"] == "day":
+                date = p["date"]
+            elif p and p["type"] == "range":
+                return {"kind": "attendance_range", "label": p.get("label"),
+                        "data": store.attendance_range(p["start"], p["end"], scope=scope)}
+            else:
+                date = None
+        return {"kind": "attendance_summary", "label": intent.get("_label"),
                 "data": store.attendance_summary(date=date, scope=scope)}
+
+    if action == "attendance_range":
+        return {"kind": "attendance_range", "label": intent.get("_label"),
+                "data": store.attendance_range(intent["start"], intent["end"], scope=scope)}
 
     # action == "query"
     coll = intent["collection"]
@@ -244,12 +396,30 @@ def _format_attendance(data):
             f"({marked} attendance record{'s' if marked != 1 else ''} logged).")
 
 
+def _format_range(data, label=None):
+    """Deterministic answer for a date range (e.g. 'last week')."""
+    start, end = data.get("start"), data.get("end")
+    when = f"{label} ({start} to {end})" if label else f"{start} to {end}"
+    records = data.get("records", 0)
+    if records == 0:
+        return f"No attendance was recorded during {when}."
+    present = data.get("present_records", 0)
+    distinct = data.get("distinct_present", 0)
+    days = data.get("days", 0)
+    total = data.get("total_students", 0)
+    return (f"During {when}: {present} present-mark{'s' if present != 1 else ''} "
+            f"across {distinct} student{'s' if distinct != 1 else ''}, over {days} "
+            f"day{'s' if days != 1 else ''} with records (out of {total} students).")
+
+
 def _compose(question, result):
     if result["kind"] in ("answer", "not_found"):
         return result["text"]
-    # Attendance counts are answered deterministically, not by the model.
+    # Attendance figures are answered deterministically, never by the model.
     if result["kind"] == "attendance_summary":
         return _format_attendance(result["data"])
+    if result["kind"] == "attendance_range":
+        return _format_range(result["data"], result.get("label"))
     context = json.dumps(result, default=str)[:6000]
     msgs = [
         {"role": "system", "content": COMPOSE_SYSTEM},
@@ -261,44 +431,69 @@ def _compose(question, result):
 # --------------------------------------------------------------------------- #
 # Orchestrator
 # --------------------------------------------------------------------------- #
-def answer(store, question, scope, context_sid=None):
-    """Returns {answer, intent, data, error?}. Degrades gracefully if the LLM
-    is unreachable or the intent is invalid."""
+def _history_msgs(history, limit=6):
+    """Recent turns as OpenAI-style messages, for multi-turn context."""
+    out = []
+    for m in (history or [])[-limit:]:
+        role = m.get("role")
+        if role in ("user", "assistant") and m.get("content"):
+            out.append({"role": role, "content": m["content"]})
+    return out
+
+
+def answer(store, question, scope, context_sid=None, history=None):
+    """Returns {answer, intent, error?}. Uses recent history for follow-ups and
+    resolves all dates against the server clock. Degrades gracefully."""
     if not settings.chat_enabled:
-        return {"answer": "Chat is disabled on this server.", "intent": None, "data": None}
+        return {"answer": "Chat is disabled on this server.", "intent": None}
     if context_sid:
         question = f"(current student on screen: {context_sid})\n{question}"
 
-    # Deterministic shortcut for attendance-count questions — skip the LLM's
-    # intent step entirely so it can't mis-route to a raw status query.
-    routed = pre_route(question)
+    # Deterministic shortcut for attendance/date questions — skips the LLM so it
+    # can neither mis-route to a raw status query nor invent a date. Uses history
+    # so follow-ups like "what about last week" continue the attendance topic.
+    routed = pre_route(question, history=history)
     if routed is not None:
         result = run_intent(store, routed, scope)
-        return {"answer": _compose(question, result), "intent": routed, "data": result}
+        return {"answer": _compose(question, result), "intent": routed}
 
+    today = _date.today().isoformat()
+    sys_prompt = SYSTEM_PROMPT + f"\n\nToday's date is {today}."
     try:
-        raw = _llm([{"role": "system", "content": SYSTEM_PROMPT},
-                    {"role": "user", "content": question}], force_json=True)
-        intent = _extract_json(raw)
+        message = _chat_completion(
+            [{"role": "system", "content": sys_prompt}]
+            + _history_msgs(history)
+            + [{"role": "user", "content": question}], tools=TOOLS)
     except (urllib.error.URLError, TimeoutError) as e:
         return {"answer": f"Could not reach the language model ({e}). Check that "
                           f"Ollama is running at {settings.chat_base_url}.",
-                "intent": None, "data": None, "error": "llm_unreachable"}
+                "intent": None, "error": "llm_unreachable"}
     except Exception as e:
-        return {"answer": "I couldn't understand that as a data question. Try asking "
-                          "about a student's attendance or assignments.",
-                "intent": None, "data": None, "error": f"parse: {e}"}
+        return {"answer": "Something went wrong talking to the language model.",
+                "intent": None, "error": f"llm: {e}"}
+
+    # No tool call -> the model answered directly (small talk / out of scope).
+    name, args = _first_tool_call(message)
+    if not name:
+        return {"answer": (message.get("content") or "").strip()
+                or "I can help with student attendance and assignments — what would "
+                   "you like to know?", "intent": None}
+
+    intent = map_tool_call(name, args)
+    if intent is None:
+        return {"answer": "I can only answer questions about attendance and assignments.",
+                "intent": {"tool": name}, "error": "unknown_tool"}
 
     ok, err = validate_intent(intent)
     if not ok:
         return {"answer": "I can only answer questions about attendance and "
                           "assignments for students you have access to.",
-                "intent": intent, "data": None, "error": err}
+                "intent": intent, "error": err}
 
     result = run_intent(store, intent, scope)
     try:
         final = _compose(question, result)
     except Exception as e:
-        final = "I retrieved the data but couldn't summarize it — see the details below."
+        final = "I retrieved the data but couldn't summarize it."
         result["compose_error"] = str(e)
-    return {"answer": final, "intent": intent, "data": result}
+    return {"answer": final, "intent": intent}

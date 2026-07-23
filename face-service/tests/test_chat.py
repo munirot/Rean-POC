@@ -56,6 +56,49 @@ def test_answer_action_ok():
     assert ok
 
 
+# --------------------------------------------------------------------------- #
+# tool-calling: model picks a tool -> internal intent (server still guards)
+# --------------------------------------------------------------------------- #
+def test_map_get_attendance_to_intent():
+    intent = chat.map_tool_call("get_attendance", {"period": "last week"})
+    assert intent == {"action": "attendance_summary", "date": "last week"}
+
+
+def test_map_get_attendance_defaults_today():
+    intent = chat.map_tool_call("get_attendance", {})
+    assert intent["action"] == "attendance_summary" and intent["date"] == "today"
+
+
+def test_map_get_student_and_cohort():
+    assert chat.map_tool_call("get_student", {"student": "Dara"}) == \
+        {"action": "student_profile", "student": "Dara"}
+    assert chat.map_tool_call("get_cohort", {"class_name": "Law"}) == \
+        {"action": "cohort", "class": "Law"}
+
+
+def test_map_search_records_builds_query_intent():
+    intent = chat.map_tool_call("search_records", {
+        "collection": "assignments", "aggregation": "count",
+        "filters": [{"field": "Catry", "op": "eq", "value": "Quiz"}]})
+    ok, err = chat.validate_intent(intent)
+    assert ok, err
+
+
+def test_map_unknown_tool_is_none():
+    assert chat.map_tool_call("drop_everything", {}) is None
+
+
+def test_first_tool_call_parses_string_arguments():
+    message = {"tool_calls": [{"function": {"name": "get_attendance",
+                                            "arguments": '{"period": "yesterday"}'}}]}
+    name, args = chat._first_tool_call(message)
+    assert name == "get_attendance" and args == {"period": "yesterday"}
+
+
+def test_first_tool_call_none_when_no_calls():
+    assert chat._first_tool_call({"content": "hello"}) == (None, None)
+
+
 def test_attendance_summary_action_ok():
     ok, err = chat.validate_intent({"action": "attendance_summary", "date": "today"})
     assert ok and err is None
@@ -140,12 +183,18 @@ def test_run_intent_injects_scope_and_ignores_inid_override():
     assert q["status"] == "A"        # allowed filter applied
 
 
+import datetime as _dt
+
+
 # --------------------------------------------------------------------------- #
 # pre-router — attendance questions bypass the LLM entirely
 # --------------------------------------------------------------------------- #
 def test_pre_route_catches_absent_today():
+    import datetime as _d
     intent = chat.pre_route("How many students were absent today?")
-    assert intent == {"action": "attendance_summary", "date": "today"}
+    assert intent["action"] == "attendance_summary"
+    # "today" resolves to a concrete date (or the literal 'today' fallback)
+    assert intent["date"] in ("today", _d.date.today().isoformat())
 
 
 def test_pre_route_picks_up_explicit_date():
@@ -156,6 +205,45 @@ def test_pre_route_picks_up_explicit_date():
 
 def test_pre_route_ignores_non_attendance():
     assert chat.pre_route("who is missing assignments in law?") is None
+
+
+# --------------------------------------------------------------------------- #
+# deterministic dates + multi-turn follow-ups (the reported bug)
+# --------------------------------------------------------------------------- #
+_TODAY = _dt.date(2026, 7, 22)   # a Wednesday
+
+
+def test_resolve_yesterday_is_concrete_not_hallucinated():
+    p = chat.resolve_period("what about yesterday?", today=_TODAY)
+    assert p == {"type": "day", "date": "2026-07-21", "label": "yesterday"}
+
+
+def test_resolve_last_week_is_a_range():
+    p = chat.resolve_period("last week", today=_TODAY)
+    # previous calendar week Mon–Sun
+    assert p["type"] == "range"
+    assert p["start"] == "2026-07-13" and p["end"] == "2026-07-19"
+
+
+def test_followup_last_week_continues_attendance_topic():
+    # "what about last week" alone isn't attendance — but after an attendance
+    # question it must continue that topic, as a range, not a hallucinated date.
+    history = [{"role": "user", "content": "how many students present today?"},
+               {"role": "assistant", "content": "0 present today."}]
+    intent = chat.pre_route("what about last week?", history=history, today=_TODAY)
+    assert intent["action"] == "attendance_range"
+    assert intent["start"] == "2026-07-13" and intent["end"] == "2026-07-19"
+
+
+def test_followup_without_attendance_history_is_not_routed():
+    history = [{"role": "user", "content": "who teaches constitutional law?"}]
+    assert chat.pre_route("what about last week?", history=history, today=_TODAY) is None
+
+
+def test_format_range_no_records():
+    msg = chat._format_range({"start": "2026-07-13", "end": "2026-07-19", "records": 0},
+                             label="last week")
+    assert "no attendance was recorded" in msg.lower() and "last week" in msg.lower()
 
 
 # --------------------------------------------------------------------------- #

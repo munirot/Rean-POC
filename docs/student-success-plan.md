@@ -229,6 +229,31 @@ every query and ignores any attempt to override it; reads are capped at
 `CHAT_ROW_CAP`; the endpoint is staff/admin-only; answers are composed strictly
 from returned rows with the raw data shown for verification.
 
+### Choosing a model (tool-calling)
+
+The chat uses **tool calling**: the model picks one of a few described tools
+(`get_attendance`, `get_student`, `get_cohort`, `search_records`) and the server
+runs it — the server still resolves all dates and injects the caller's scope, so
+correctness and privacy do not depend on the model. This scales without adding
+per-question routing code: new capabilities are new tools, not new `if` branches.
+
+Because of this, use a **tool-capable** model. `qwen2.5:7b-instruct` (default)
+supports tools; for better intent/context understanding, try a larger local
+model — no code change, just:
+
+```bash
+ollama pull qwen2.5:14b-instruct     # or qwen2.5:32b-instruct
+```
+```
+CHAT_MODEL=qwen2.5:14b-instruct
+```
+
+Bigger models mainly improve the *understanding* (which tool, following a
+multi-turn thread) and *phrasing* — not the numbers, which are computed by the
+server. Attendance/date questions are still answered by a deterministic
+pre-router (works even with the model offline); tool calling covers the rest.
+Trade-off: larger models need more RAM/VRAM and are slower per reply.
+
 ### Deployment note — read-only DB user
 
 `app/chat.py` only ever issues `find`/`count_documents`, but for defense in
