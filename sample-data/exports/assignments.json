@@ -8,40 +8,41 @@
     "SemID": "SM001",
     "SecID": "SC001",
     "AcYr": "AY2526",
-    "Title": "International Law — Homework 1",
+    "Title": "International Law — Homework",
     "Catry": "Homework",
     "SubID": "SB001",
     "SubNa": "International Law",
     "StaffID": "ST001",
     "StaffNa": "Dara Sok",
-    "assgndDt": "2026-06-21",
+    "assgndDt": "2026-06-24",
     "assgnDueDt": "2026-07-01",
     "endTme": "23:59",
+    "maxMarks": 100,
     "Students": [
       {
         "StuID": "2301",
-        "status": "graded",
+        "status": "submitted",
         "marks": null
       },
       {
         "StuID": "2302",
         "status": "graded",
-        "marks": 80
-      },
-      {
-        "StuID": "2303",
-        "status": "submitted",
-        "marks": null
-      },
-      {
-        "StuID": "2304",
-        "status": "assigned",
         "marks": 96
       },
       {
+        "StuID": "2303",
+        "status": "graded",
+        "marks": 82
+      },
+      {
+        "StuID": "2304",
+        "status": "graded",
+        "marks": 79
+      },
+      {
         "StuID": "2305",
-        "status": "assigned",
-        "marks": 77
+        "status": "graded",
+        "marks": 100
       },
       {
         "StuID": "2306",
@@ -51,16 +52,16 @@
       {
         "StuID": "2307",
         "status": "graded",
-        "marks": null
+        "marks": 83
       },
       {
         "StuID": "2308",
-        "status": "assigned",
-        "marks": null
+        "status": "graded",
+        "marks": 81
       }
     ],
     "StFl": "A",
-    "CrAt": "2026-07-13 00:00:00+00:00"
+    "CrAt": "2026-07-28 09:46:35.743701+00:00"
   },
   {
     "CmAssID": "AS002",
@@ -71,20 +72,21 @@
     "SemID": "SM001",
     "SecID": "SC001",
     "AcYr": "AY2526",
-    "Title": "Diplomacy & Negotiation — Homework 1",
+    "Title": "International Law — Homework",
     "Catry": "Homework",
-    "SubID": "SB002",
-    "SubNa": "Diplomacy & Negotiation",
-    "StaffID": "ST002",
-    "StaffNa": "Sophal Chan",
-    "assgndDt": "2026-06-22",
-    "assgnDueDt": "2026-07-02",
+    "SubID": "SB001",
+    "SubNa": "International Law",
+    "StaffID": "ST001",
+    "StaffNa": "Dara Sok",
+    "assgndDt": "2026-07-02",
+    "assgnDueDt": "2026-07-09",
     "endTme": "23:59",
+    "maxMarks": 100,
     "Students": [
       {
         "StuID": "2301",
-        "status": "assigned",
-        "marks": null
+        "status": "graded",
+        "marks": 89
       },
       {
         "StuID": "2302",
@@ -94,36 +96,36 @@
       {
         "StuID": "2303",
         "status": "graded",
-        "marks": null
+        "marks": 72
       },
       {
         "StuID": "2304",
-        "status": "submitted",
-        "marks": 86
+        "status": "graded",
+        "marks": 62
       },
       {
         "StuID": "2305",
-        "status": "submitted",
-        "marks": 78
+        "status": "assigned",
+        "marks": null
       },
       {
         "StuID": "2306",
-        "status": "submitted",
-        "marks": null
+        "status": "graded",
+        "marks": 79
       },
       {
         "StuID": "2307",
-        "status": "submitted",
-        "marks": null
+        "status": "graded",
+        "marks": 66
       },
       {
         "StuID": "2308",
-        "status": "submitted",
-        "marks": null
+        "status": "graded",
+        "marks": 82
       }
     ],
     "StFl": "A",
-    "CrAt": "2026-07-13 00:00:00+00:00"
+    "CrAt": "2026-07-28 09:46:35.743746+00:00"
   },
   {
     "CmAssID": "AS003",
@@ -134,15 +136,144 @@
     "SemID": "SM001",
     "SecID": "SC001",
     "AcYr": "AY2526",
-    "Title": "Diplomacy & Negotiation — Quiz 2",
+    "Title": "International Law — Quiz",
     "Catry": "Quiz",
-    "SubID": "SB002",
-    "SubNa": "Diplomacy & Negotiation",
-    "StaffID": "ST002",
-    "StaffNa": "Sophal Chan",
-    "assgndDt": "2026-06-23",
-    "assgnDueDt": "2026-07-03",
+    "SubID": "SB001",
+    "SubNa": "International Law",
+    "StaffID": "ST001",
+    "StaffNa": "Dara Sok",
+    "assgndDt": "2026-07-09",
+    "assgnDueDt": "2026-07-16",
     "endTme": "23:59",
+    "maxMarks": 100,
+    "Students": [
+      {
+        "StuID": "2301",
+        "status": "graded",
+        "marks": 100
+      },
+      {
+        "StuID": "2302",
+        "status": "graded",
+        "marks": 72
+      },
+      {
+        "StuID": "2303",
+        "status": "graded",
+        "marks": 72
+      },
+      {
+        "StuID": "2304",
+        "status": "graded",
+        "marks": 97
+      },
+      {
+        "StuID": "2305",
+        "status": "graded",
+        "marks": 84
+      },
+      {
+        "StuID": "2306",
+        "status": "graded",
+        "marks": 94
+      },
+      {
+        "StuID": "2307",
+        "status": "graded",
+        "marks": 91
+      },
+      {
+        "StuID": "2308",
+        "status": "graded",
+        "marks": 88
+      }
+    ],
+    "StFl": "A",
+    "CrAt": "2026-07-28 09:46:35.743776+00:00"
+  },
+  {
+    "CmAssID": "AS004",
+    "InId": "IN001",
+    "PrID": "PR001",
+    "CrID": "CR001",
+    "DeptID": "DP004",
+    "SemID": "SM001",
+    "SecID": "SC001",
+    "AcYr": "AY2526",
+    "Title": "International Law — Exam",
+    "Catry": "Exam",
+    "SubID": "SB001",
+    "SubNa": "International Law",
+    "StaffID": "ST001",
+    "StaffNa": "Dara Sok",
+    "assgndDt": "2026-07-16",
+    "assgnDueDt": "2026-07-23",
+    "endTme": "23:59",
+    "maxMarks": 100,
+    "Students": [
+      {
+        "StuID": "2301",
+        "status": "assigned",
+        "marks": null
+      },
+      {
+        "StuID": "2302",
+        "status": "graded",
+        "marks": 66
+      },
+      {
+        "StuID": "2303",
+        "status": "graded",
+        "marks": 95
+      },
+      {
+        "StuID": "2304",
+        "status": "submitted",
+        "marks": null
+      },
+      {
+        "StuID": "2305",
+        "status": "graded",
+        "marks": 58
+      },
+      {
+        "StuID": "2306",
+        "status": "submitted",
+        "marks": null
+      },
+      {
+        "StuID": "2307",
+        "status": "graded",
+        "marks": 74
+      },
+      {
+        "StuID": "2308",
+        "status": "assigned",
+        "marks": null
+      }
+    ],
+    "StFl": "A",
+    "CrAt": "2026-07-28 09:46:35.743802+00:00"
+  },
+  {
+    "CmAssID": "AS005",
+    "InId": "IN001",
+    "PrID": "PR001",
+    "CrID": "CR001",
+    "DeptID": "DP004",
+    "SemID": "SM001",
+    "SecID": "SC001",
+    "AcYr": "AY2526",
+    "Title": "International Law — Project",
+    "Catry": "Project",
+    "SubID": "SB001",
+    "SubNa": "International Law",
+    "StaffID": "ST001",
+    "StaffNa": "Dara Sok",
+    "assgndDt": "2026-07-24",
+    "assgnDueDt": "2026-07-31",
+    "endTme": "23:59",
+    "maxMarks": 100,
     "Students": [
       {
         "StuID": "2301",
@@ -151,7 +282,7 @@
       },
       {
         "StuID": "2302",
-        "status": "graded",
+        "status": "assigned",
         "marks": null
       },
       {
@@ -161,12 +292,332 @@
       },
       {
         "StuID": "2304",
+        "status": "assigned",
+        "marks": null
+      },
+      {
+        "StuID": "2305",
+        "status": "assigned",
+        "marks": null
+      },
+      {
+        "StuID": "2306",
+        "status": "submitted",
+        "marks": null
+      },
+      {
+        "StuID": "2307",
+        "status": "assigned",
+        "marks": null
+      },
+      {
+        "StuID": "2308",
+        "status": "assigned",
+        "marks": null
+      }
+    ],
+    "StFl": "A",
+    "CrAt": "2026-07-28 09:46:35.743837+00:00"
+  },
+  {
+    "CmAssID": "AS006",
+    "InId": "IN001",
+    "PrID": "PR001",
+    "CrID": "CR001",
+    "DeptID": "DP004",
+    "SemID": "SM001",
+    "SecID": "SC001",
+    "AcYr": "AY2526",
+    "Title": "Diplomacy & Negotiation — Homework",
+    "Catry": "Homework",
+    "SubID": "SB002",
+    "SubNa": "Diplomacy & Negotiation",
+    "StaffID": "ST002",
+    "StaffNa": "Sophal Chan",
+    "assgndDt": "2026-06-24",
+    "assgnDueDt": "2026-07-01",
+    "endTme": "23:59",
+    "maxMarks": 100,
+    "Students": [
+      {
+        "StuID": "2301",
+        "status": "assigned",
+        "marks": null
+      },
+      {
+        "StuID": "2302",
+        "status": "graded",
+        "marks": 75
+      },
+      {
+        "StuID": "2303",
+        "status": "submitted",
+        "marks": null
+      },
+      {
+        "StuID": "2304",
+        "status": "graded",
+        "marks": 71
+      },
+      {
+        "StuID": "2305",
+        "status": "graded",
+        "marks": 79
+      },
+      {
+        "StuID": "2306",
+        "status": "submitted",
+        "marks": null
+      },
+      {
+        "StuID": "2307",
+        "status": "graded",
+        "marks": 99
+      },
+      {
+        "StuID": "2308",
+        "status": "graded",
+        "marks": 97
+      }
+    ],
+    "StFl": "A",
+    "CrAt": "2026-07-28 09:46:35.743874+00:00"
+  },
+  {
+    "CmAssID": "AS007",
+    "InId": "IN001",
+    "PrID": "PR001",
+    "CrID": "CR001",
+    "DeptID": "DP004",
+    "SemID": "SM001",
+    "SecID": "SC001",
+    "AcYr": "AY2526",
+    "Title": "Diplomacy & Negotiation — Homework",
+    "Catry": "Homework",
+    "SubID": "SB002",
+    "SubNa": "Diplomacy & Negotiation",
+    "StaffID": "ST002",
+    "StaffNa": "Sophal Chan",
+    "assgndDt": "2026-07-02",
+    "assgnDueDt": "2026-07-09",
+    "endTme": "23:59",
+    "maxMarks": 100,
+    "Students": [
+      {
+        "StuID": "2301",
+        "status": "graded",
+        "marks": 66
+      },
+      {
+        "StuID": "2302",
+        "status": "graded",
+        "marks": 98
+      },
+      {
+        "StuID": "2303",
+        "status": "submitted",
+        "marks": null
+      },
+      {
+        "StuID": "2304",
+        "status": "graded",
+        "marks": 72
+      },
+      {
+        "StuID": "2305",
+        "status": "graded",
+        "marks": 85
+      },
+      {
+        "StuID": "2306",
+        "status": "graded",
+        "marks": 96
+      },
+      {
+        "StuID": "2307",
+        "status": "graded",
+        "marks": 80
+      },
+      {
+        "StuID": "2308",
+        "status": "submitted",
+        "marks": null
+      }
+    ],
+    "StFl": "A",
+    "CrAt": "2026-07-28 09:46:35.743904+00:00"
+  },
+  {
+    "CmAssID": "AS008",
+    "InId": "IN001",
+    "PrID": "PR001",
+    "CrID": "CR001",
+    "DeptID": "DP004",
+    "SemID": "SM001",
+    "SecID": "SC001",
+    "AcYr": "AY2526",
+    "Title": "Diplomacy & Negotiation — Quiz",
+    "Catry": "Quiz",
+    "SubID": "SB002",
+    "SubNa": "Diplomacy & Negotiation",
+    "StaffID": "ST002",
+    "StaffNa": "Sophal Chan",
+    "assgndDt": "2026-07-09",
+    "assgnDueDt": "2026-07-16",
+    "endTme": "23:59",
+    "maxMarks": 100,
+    "Students": [
+      {
+        "StuID": "2301",
+        "status": "submitted",
+        "marks": null
+      },
+      {
+        "StuID": "2302",
+        "status": "submitted",
+        "marks": null
+      },
+      {
+        "StuID": "2303",
+        "status": "graded",
+        "marks": 81
+      },
+      {
+        "StuID": "2304",
+        "status": "graded",
+        "marks": 77
+      },
+      {
+        "StuID": "2305",
+        "status": "graded",
+        "marks": 86
+      },
+      {
+        "StuID": "2306",
         "status": "graded",
         "marks": 83
       },
       {
-        "StuID": "2305",
+        "StuID": "2307",
+        "status": "graded",
+        "marks": 88
+      },
+      {
+        "StuID": "2308",
+        "status": "graded",
+        "marks": 97
+      }
+    ],
+    "StFl": "A",
+    "CrAt": "2026-07-28 09:46:35.743928+00:00"
+  },
+  {
+    "CmAssID": "AS009",
+    "InId": "IN001",
+    "PrID": "PR001",
+    "CrID": "CR001",
+    "DeptID": "DP004",
+    "SemID": "SM001",
+    "SecID": "SC001",
+    "AcYr": "AY2526",
+    "Title": "Diplomacy & Negotiation — Exam",
+    "Catry": "Exam",
+    "SubID": "SB002",
+    "SubNa": "Diplomacy & Negotiation",
+    "StaffID": "ST002",
+    "StaffNa": "Sophal Chan",
+    "assgndDt": "2026-07-16",
+    "assgnDueDt": "2026-07-23",
+    "endTme": "23:59",
+    "maxMarks": 100,
+    "Students": [
+      {
+        "StuID": "2301",
+        "status": "graded",
+        "marks": 51
+      },
+      {
+        "StuID": "2302",
         "status": "submitted",
+        "marks": null
+      },
+      {
+        "StuID": "2303",
+        "status": "graded",
+        "marks": 69
+      },
+      {
+        "StuID": "2304",
+        "status": "submitted",
+        "marks": null
+      },
+      {
+        "StuID": "2305",
+        "status": "graded",
+        "marks": 76
+      },
+      {
+        "StuID": "2306",
+        "status": "graded",
+        "marks": 45
+      },
+      {
+        "StuID": "2307",
+        "status": "graded",
+        "marks": 50
+      },
+      {
+        "StuID": "2308",
+        "status": "submitted",
+        "marks": null
+      }
+    ],
+    "StFl": "A",
+    "CrAt": "2026-07-28 09:46:35.743953+00:00"
+  },
+  {
+    "CmAssID": "AS010",
+    "InId": "IN001",
+    "PrID": "PR001",
+    "CrID": "CR001",
+    "DeptID": "DP004",
+    "SemID": "SM001",
+    "SecID": "SC001",
+    "AcYr": "AY2526",
+    "Title": "Diplomacy & Negotiation — Project",
+    "Catry": "Project",
+    "SubID": "SB002",
+    "SubNa": "Diplomacy & Negotiation",
+    "StaffID": "ST002",
+    "StaffNa": "Sophal Chan",
+    "assgndDt": "2026-07-24",
+    "assgnDueDt": "2026-07-31",
+    "endTme": "23:59",
+    "maxMarks": 100,
+    "Students": [
+      {
+        "StuID": "2301",
+        "status": "assigned",
+        "marks": null
+      },
+      {
+        "StuID": "2302",
+        "status": "assigned",
+        "marks": null
+      },
+      {
+        "StuID": "2303",
+        "status": "submitted",
+        "marks": null
+      },
+      {
+        "StuID": "2304",
+        "status": "submitted",
+        "marks": null
+      },
+      {
+        "StuID": "2305",
+        "status": "assigned",
         "marks": null
       },
       {
@@ -176,20 +627,20 @@
       },
       {
         "StuID": "2307",
-        "status": "graded",
+        "status": "assigned",
         "marks": null
       },
       {
         "StuID": "2308",
-        "status": "submitted",
+        "status": "assigned",
         "marks": null
       }
     ],
     "StFl": "A",
-    "CrAt": "2026-07-13 00:00:00+00:00"
+    "CrAt": "2026-07-28 09:46:35.743976+00:00"
   },
   {
-    "CmAssID": "AS004",
+    "CmAssID": "AS011",
     "InId": "IN001",
     "PrID": "PR001",
     "CrID": "CR002",
@@ -197,34 +648,291 @@
     "SemID": "SM001",
     "SecID": "SC001",
     "AcYr": "AY2526",
-    "Title": "Public Policy — Homework 1",
+    "Title": "Public Policy — Homework",
     "Catry": "Homework",
     "SubID": "SB003",
     "SubNa": "Public Policy",
     "StaffID": "ST003",
     "StaffNa": "Vichea Meas",
     "assgndDt": "2026-06-24",
-    "assgnDueDt": "2026-07-04",
+    "assgnDueDt": "2026-07-01",
     "endTme": "23:59",
+    "maxMarks": 100,
     "Students": [
       {
         "StuID": "2309",
         "status": "graded",
-        "marks": null
+        "marks": 75
       },
       {
         "StuID": "2310",
-        "status": "graded",
+        "status": "assigned",
         "marks": null
       },
       {
         "StuID": "2311",
         "status": "graded",
-        "marks": 60
+        "marks": 62
       },
       {
         "StuID": "2312",
+        "status": "graded",
+        "marks": 91
+      },
+      {
+        "StuID": "2313",
+        "status": "graded",
+        "marks": 65
+      },
+      {
+        "StuID": "2314",
+        "status": "graded",
+        "marks": 79
+      },
+      {
+        "StuID": "2315",
+        "status": "graded",
+        "marks": 60
+      },
+      {
+        "StuID": "2316",
+        "status": "graded",
+        "marks": 72
+      }
+    ],
+    "StFl": "A",
+    "CrAt": "2026-07-28 09:46:35.744005+00:00"
+  },
+  {
+    "CmAssID": "AS012",
+    "InId": "IN001",
+    "PrID": "PR001",
+    "CrID": "CR002",
+    "DeptID": "DP001",
+    "SemID": "SM001",
+    "SecID": "SC001",
+    "AcYr": "AY2526",
+    "Title": "Public Policy — Homework",
+    "Catry": "Homework",
+    "SubID": "SB003",
+    "SubNa": "Public Policy",
+    "StaffID": "ST003",
+    "StaffNa": "Vichea Meas",
+    "assgndDt": "2026-07-02",
+    "assgnDueDt": "2026-07-09",
+    "endTme": "23:59",
+    "maxMarks": 100,
+    "Students": [
+      {
+        "StuID": "2309",
+        "status": "graded",
+        "marks": 93
+      },
+      {
+        "StuID": "2310",
+        "status": "assigned",
+        "marks": null
+      },
+      {
+        "StuID": "2311",
+        "status": "graded",
+        "marks": 94
+      },
+      {
+        "StuID": "2312",
+        "status": "graded",
+        "marks": 89
+      },
+      {
+        "StuID": "2313",
         "status": "submitted",
+        "marks": null
+      },
+      {
+        "StuID": "2314",
+        "status": "graded",
+        "marks": 77
+      },
+      {
+        "StuID": "2315",
+        "status": "graded",
+        "marks": 67
+      },
+      {
+        "StuID": "2316",
+        "status": "submitted",
+        "marks": null
+      }
+    ],
+    "StFl": "A",
+    "CrAt": "2026-07-28 09:46:35.744030+00:00"
+  },
+  {
+    "CmAssID": "AS013",
+    "InId": "IN001",
+    "PrID": "PR001",
+    "CrID": "CR002",
+    "DeptID": "DP001",
+    "SemID": "SM001",
+    "SecID": "SC001",
+    "AcYr": "AY2526",
+    "Title": "Public Policy — Quiz",
+    "Catry": "Quiz",
+    "SubID": "SB003",
+    "SubNa": "Public Policy",
+    "StaffID": "ST003",
+    "StaffNa": "Vichea Meas",
+    "assgndDt": "2026-07-09",
+    "assgnDueDt": "2026-07-16",
+    "endTme": "23:59",
+    "maxMarks": 100,
+    "Students": [
+      {
+        "StuID": "2309",
+        "status": "graded",
+        "marks": 90
+      },
+      {
+        "StuID": "2310",
+        "status": "graded",
+        "marks": 70
+      },
+      {
+        "StuID": "2311",
+        "status": "graded",
+        "marks": 62
+      },
+      {
+        "StuID": "2312",
+        "status": "graded",
+        "marks": 83
+      },
+      {
+        "StuID": "2313",
+        "status": "graded",
+        "marks": 87
+      },
+      {
+        "StuID": "2314",
+        "status": "graded",
+        "marks": 99
+      },
+      {
+        "StuID": "2315",
+        "status": "submitted",
+        "marks": null
+      },
+      {
+        "StuID": "2316",
+        "status": "submitted",
+        "marks": null
+      }
+    ],
+    "StFl": "A",
+    "CrAt": "2026-07-28 09:46:35.744054+00:00"
+  },
+  {
+    "CmAssID": "AS014",
+    "InId": "IN001",
+    "PrID": "PR001",
+    "CrID": "CR002",
+    "DeptID": "DP001",
+    "SemID": "SM001",
+    "SecID": "SC001",
+    "AcYr": "AY2526",
+    "Title": "Public Policy — Exam",
+    "Catry": "Exam",
+    "SubID": "SB003",
+    "SubNa": "Public Policy",
+    "StaffID": "ST003",
+    "StaffNa": "Vichea Meas",
+    "assgndDt": "2026-07-16",
+    "assgnDueDt": "2026-07-23",
+    "endTme": "23:59",
+    "maxMarks": 100,
+    "Students": [
+      {
+        "StuID": "2309",
+        "status": "graded",
+        "marks": 92
+      },
+      {
+        "StuID": "2310",
+        "status": "graded",
+        "marks": 79
+      },
+      {
+        "StuID": "2311",
+        "status": "graded",
+        "marks": 95
+      },
+      {
+        "StuID": "2312",
+        "status": "graded",
+        "marks": 77
+      },
+      {
+        "StuID": "2313",
+        "status": "graded",
+        "marks": 60
+      },
+      {
+        "StuID": "2314",
+        "status": "submitted",
+        "marks": null
+      },
+      {
+        "StuID": "2315",
+        "status": "graded",
+        "marks": 65
+      },
+      {
+        "StuID": "2316",
+        "status": "graded",
+        "marks": 92
+      }
+    ],
+    "StFl": "A",
+    "CrAt": "2026-07-28 09:46:35.744078+00:00"
+  },
+  {
+    "CmAssID": "AS015",
+    "InId": "IN001",
+    "PrID": "PR001",
+    "CrID": "CR002",
+    "DeptID": "DP001",
+    "SemID": "SM001",
+    "SecID": "SC001",
+    "AcYr": "AY2526",
+    "Title": "Public Policy — Project",
+    "Catry": "Project",
+    "SubID": "SB003",
+    "SubNa": "Public Policy",
+    "StaffID": "ST003",
+    "StaffNa": "Vichea Meas",
+    "assgndDt": "2026-07-24",
+    "assgnDueDt": "2026-07-31",
+    "endTme": "23:59",
+    "maxMarks": 100,
+    "Students": [
+      {
+        "StuID": "2309",
+        "status": "submitted",
+        "marks": null
+      },
+      {
+        "StuID": "2310",
+        "status": "assigned",
+        "marks": null
+      },
+      {
+        "StuID": "2311",
+        "status": "submitted",
+        "marks": null
+      },
+      {
+        "StuID": "2312",
+        "status": "assigned",
         "marks": null
       },
       {
@@ -234,7 +942,135 @@
       },
       {
         "StuID": "2314",
+        "status": "submitted",
+        "marks": null
+      },
+      {
+        "StuID": "2315",
+        "status": "submitted",
+        "marks": null
+      },
+      {
+        "StuID": "2316",
+        "status": "assigned",
+        "marks": null
+      }
+    ],
+    "StFl": "A",
+    "CrAt": "2026-07-28 09:46:35.744100+00:00"
+  },
+  {
+    "CmAssID": "AS016",
+    "InId": "IN001",
+    "PrID": "PR001",
+    "CrID": "CR002",
+    "DeptID": "DP001",
+    "SemID": "SM001",
+    "SecID": "SC001",
+    "AcYr": "AY2526",
+    "Title": "Governance & Ethics — Homework",
+    "Catry": "Homework",
+    "SubID": "SB004",
+    "SubNa": "Governance & Ethics",
+    "StaffID": "ST003",
+    "StaffNa": "Vichea Meas",
+    "assgndDt": "2026-06-24",
+    "assgnDueDt": "2026-07-01",
+    "endTme": "23:59",
+    "maxMarks": 100,
+    "Students": [
+      {
+        "StuID": "2309",
         "status": "graded",
+        "marks": 90
+      },
+      {
+        "StuID": "2310",
+        "status": "graded",
+        "marks": 63
+      },
+      {
+        "StuID": "2311",
+        "status": "submitted",
+        "marks": null
+      },
+      {
+        "StuID": "2312",
+        "status": "graded",
+        "marks": 99
+      },
+      {
+        "StuID": "2313",
+        "status": "graded",
+        "marks": 84
+      },
+      {
+        "StuID": "2314",
+        "status": "graded",
+        "marks": 89
+      },
+      {
+        "StuID": "2315",
+        "status": "submitted",
+        "marks": null
+      },
+      {
+        "StuID": "2316",
+        "status": "graded",
+        "marks": 77
+      }
+    ],
+    "StFl": "A",
+    "CrAt": "2026-07-28 09:46:35.744137+00:00"
+  },
+  {
+    "CmAssID": "AS017",
+    "InId": "IN001",
+    "PrID": "PR001",
+    "CrID": "CR002",
+    "DeptID": "DP001",
+    "SemID": "SM001",
+    "SecID": "SC001",
+    "AcYr": "AY2526",
+    "Title": "Governance & Ethics — Homework",
+    "Catry": "Homework",
+    "SubID": "SB004",
+    "SubNa": "Governance & Ethics",
+    "StaffID": "ST003",
+    "StaffNa": "Vichea Meas",
+    "assgndDt": "2026-07-02",
+    "assgnDueDt": "2026-07-09",
+    "endTme": "23:59",
+    "maxMarks": 100,
+    "Students": [
+      {
+        "StuID": "2309",
+        "status": "graded",
+        "marks": 68
+      },
+      {
+        "StuID": "2310",
+        "status": "graded",
+        "marks": 96
+      },
+      {
+        "StuID": "2311",
+        "status": "graded",
+        "marks": 68
+      },
+      {
+        "StuID": "2312",
+        "status": "graded",
+        "marks": 89
+      },
+      {
+        "StuID": "2313",
+        "status": "graded",
+        "marks": 70
+      },
+      {
+        "StuID": "2314",
+        "status": "submitted",
         "marks": null
       },
       {
@@ -245,14 +1081,14 @@
       {
         "StuID": "2316",
         "status": "graded",
-        "marks": null
+        "marks": 100
       }
     ],
     "StFl": "A",
-    "CrAt": "2026-07-13 00:00:00+00:00"
+    "CrAt": "2026-07-28 09:46:35.744160+00:00"
   },
   {
-    "CmAssID": "AS005",
+    "CmAssID": "AS018",
     "InId": "IN001",
     "PrID": "PR001",
     "CrID": "CR002",
@@ -260,78 +1096,80 @@
     "SemID": "SM001",
     "SecID": "SC001",
     "AcYr": "AY2526",
-    "Title": "Governance & Ethics — Homework 1",
-    "Catry": "Homework",
-    "SubID": "SB004",
-    "SubNa": "Governance & Ethics",
-    "StaffID": "ST001",
-    "StaffNa": "Dara Sok",
-    "assgndDt": "2026-06-25",
-    "assgnDueDt": "2026-07-05",
-    "endTme": "23:59",
-    "Students": [
-      {
-        "StuID": "2309",
-        "status": "submitted",
-        "marks": null
-      },
-      {
-        "StuID": "2310",
-        "status": "graded",
-        "marks": null
-      },
-      {
-        "StuID": "2311",
-        "status": "assigned",
-        "marks": 98
-      },
-      {
-        "StuID": "2312",
-        "status": "graded",
-        "marks": null
-      },
-      {
-        "StuID": "2313",
-        "status": "submitted",
-        "marks": null
-      },
-      {
-        "StuID": "2314",
-        "status": "graded",
-        "marks": null
-      },
-      {
-        "StuID": "2315",
-        "status": "submitted",
-        "marks": 79
-      },
-      {
-        "StuID": "2316",
-        "status": "graded",
-        "marks": null
-      }
-    ],
-    "StFl": "A",
-    "CrAt": "2026-07-13 00:00:00+00:00"
-  },
-  {
-    "CmAssID": "AS006",
-    "InId": "IN001",
-    "PrID": "PR001",
-    "CrID": "CR002",
-    "DeptID": "DP001",
-    "SemID": "SM001",
-    "SecID": "SC001",
-    "AcYr": "AY2526",
-    "Title": "Governance & Ethics — Quiz 2",
+    "Title": "Governance & Ethics — Quiz",
     "Catry": "Quiz",
     "SubID": "SB004",
     "SubNa": "Governance & Ethics",
-    "StaffID": "ST001",
-    "StaffNa": "Dara Sok",
-    "assgndDt": "2026-06-26",
-    "assgnDueDt": "2026-07-06",
+    "StaffID": "ST003",
+    "StaffNa": "Vichea Meas",
+    "assgndDt": "2026-07-09",
+    "assgnDueDt": "2026-07-16",
     "endTme": "23:59",
+    "maxMarks": 100,
+    "Students": [
+      {
+        "StuID": "2309",
+        "status": "assigned",
+        "marks": null
+      },
+      {
+        "StuID": "2310",
+        "status": "assigned",
+        "marks": null
+      },
+      {
+        "StuID": "2311",
+        "status": "graded",
+        "marks": 95
+      },
+      {
+        "StuID": "2312",
+        "status": "submitted",
+        "marks": null
+      },
+      {
+        "StuID": "2313",
+        "status": "graded",
+        "marks": 93
+      },
+      {
+        "StuID": "2314",
+        "status": "graded",
+        "marks": 73
+      },
+      {
+        "StuID": "2315",
+        "status": "graded",
+        "marks": 89
+      },
+      {
+        "StuID": "2316",
+        "status": "graded",
+        "marks": 87
+      }
+    ],
+    "StFl": "A",
+    "CrAt": "2026-07-28 09:46:35.744190+00:00"
+  },
+  {
+    "CmAssID": "AS019",
+    "InId": "IN001",
+    "PrID": "PR001",
+    "CrID": "CR002",
+    "DeptID": "DP001",
+    "SemID": "SM001",
+    "SecID": "SC001",
+    "AcYr": "AY2526",
+    "Title": "Governance & Ethics — Exam",
+    "Catry": "Exam",
+    "SubID": "SB004",
+    "SubNa": "Governance & Ethics",
+    "StaffID": "ST003",
+    "StaffNa": "Vichea Meas",
+    "assgndDt": "2026-07-16",
+    "assgnDueDt": "2026-07-23",
+    "endTme": "23:59",
+    "maxMarks": 100,
     "Students": [
       {
         "StuID": "2309",
@@ -340,18 +1178,82 @@
       },
       {
         "StuID": "2310",
-        "status": "submitted",
-        "marks": 81
+        "status": "graded",
+        "marks": 65
       },
       {
         "StuID": "2311",
         "status": "graded",
-        "marks": null
+        "marks": 59
       },
       {
         "StuID": "2312",
         "status": "submitted",
-        "marks": 72
+        "marks": null
+      },
+      {
+        "StuID": "2313",
+        "status": "graded",
+        "marks": 54
+      },
+      {
+        "StuID": "2314",
+        "status": "assigned",
+        "marks": null
+      },
+      {
+        "StuID": "2315",
+        "status": "submitted",
+        "marks": null
+      },
+      {
+        "StuID": "2316",
+        "status": "graded",
+        "marks": 47
+      }
+    ],
+    "StFl": "A",
+    "CrAt": "2026-07-28 09:46:35.744213+00:00"
+  },
+  {
+    "CmAssID": "AS020",
+    "InId": "IN001",
+    "PrID": "PR001",
+    "CrID": "CR002",
+    "DeptID": "DP001",
+    "SemID": "SM001",
+    "SecID": "SC001",
+    "AcYr": "AY2526",
+    "Title": "Governance & Ethics — Project",
+    "Catry": "Project",
+    "SubID": "SB004",
+    "SubNa": "Governance & Ethics",
+    "StaffID": "ST003",
+    "StaffNa": "Vichea Meas",
+    "assgndDt": "2026-07-24",
+    "assgnDueDt": "2026-07-31",
+    "endTme": "23:59",
+    "maxMarks": 100,
+    "Students": [
+      {
+        "StuID": "2309",
+        "status": "assigned",
+        "marks": null
+      },
+      {
+        "StuID": "2310",
+        "status": "assigned",
+        "marks": null
+      },
+      {
+        "StuID": "2311",
+        "status": "submitted",
+        "marks": null
+      },
+      {
+        "StuID": "2312",
+        "status": "assigned",
+        "marks": null
       },
       {
         "StuID": "2313",
@@ -366,19 +1268,19 @@
       {
         "StuID": "2315",
         "status": "submitted",
-        "marks": 90
+        "marks": null
       },
       {
         "StuID": "2316",
         "status": "submitted",
-        "marks": 84
+        "marks": null
       }
     ],
     "StFl": "A",
-    "CrAt": "2026-07-13 00:00:00+00:00"
+    "CrAt": "2026-07-28 09:46:35.744238+00:00"
   },
   {
-    "CmAssID": "AS007",
+    "CmAssID": "AS021",
     "InId": "IN001",
     "PrID": "PR001",
     "CrID": "CR003",
@@ -386,62 +1288,63 @@
     "SemID": "SM001",
     "SecID": "SC001",
     "AcYr": "AY2526",
-    "Title": "Constitutional Law — Homework 1",
+    "Title": "Constitutional Law — Homework",
     "Catry": "Homework",
     "SubID": "SB005",
     "SubNa": "Constitutional Law",
     "StaffID": "ST004",
     "StaffNa": "Rithy Ngo",
-    "assgndDt": "2026-06-27",
-    "assgnDueDt": "2026-07-07",
+    "assgndDt": "2026-06-24",
+    "assgnDueDt": "2026-07-01",
     "endTme": "23:59",
+    "maxMarks": 100,
     "Students": [
       {
         "StuID": "2317",
-        "status": "submitted",
-        "marks": null
+        "status": "graded",
+        "marks": 75
       },
       {
         "StuID": "2318",
         "status": "graded",
-        "marks": null
+        "marks": 60
       },
       {
         "StuID": "2319",
-        "status": "assigned",
-        "marks": null
+        "status": "graded",
+        "marks": 86
       },
       {
         "StuID": "2320",
-        "status": "graded",
+        "status": "assigned",
         "marks": null
       },
       {
         "StuID": "2321",
         "status": "graded",
-        "marks": null
+        "marks": 78
       },
       {
         "StuID": "2322",
         "status": "graded",
-        "marks": null
+        "marks": 65
       },
       {
         "StuID": "2323",
-        "status": "submitted",
-        "marks": null
+        "status": "graded",
+        "marks": 79
       },
       {
         "StuID": "2324",
         "status": "graded",
-        "marks": 85
+        "marks": 89
       }
     ],
     "StFl": "A",
-    "CrAt": "2026-07-13 00:00:00+00:00"
+    "CrAt": "2026-07-28 09:46:35.744265+00:00"
   },
   {
-    "CmAssID": "AS008",
+    "CmAssID": "AS022",
     "InId": "IN001",
     "PrID": "PR001",
     "CrID": "CR003",
@@ -449,15 +1352,16 @@
     "SemID": "SM001",
     "SecID": "SC001",
     "AcYr": "AY2526",
-    "Title": "Criminal Law — Homework 1",
+    "Title": "Constitutional Law — Homework",
     "Catry": "Homework",
-    "SubID": "SB006",
-    "SubNa": "Criminal Law",
-    "StaffID": "ST001",
-    "StaffNa": "Dara Sok",
-    "assgndDt": "2026-06-28",
-    "assgnDueDt": "2026-07-08",
+    "SubID": "SB005",
+    "SubNa": "Constitutional Law",
+    "StaffID": "ST004",
+    "StaffNa": "Rithy Ngo",
+    "assgndDt": "2026-07-02",
+    "assgnDueDt": "2026-07-09",
     "endTme": "23:59",
+    "maxMarks": 100,
     "Students": [
       {
         "StuID": "2317",
@@ -467,7 +1371,327 @@
       {
         "StuID": "2318",
         "status": "submitted",
+        "marks": null
+      },
+      {
+        "StuID": "2319",
+        "status": "graded",
+        "marks": 89
+      },
+      {
+        "StuID": "2320",
+        "status": "graded",
+        "marks": 68
+      },
+      {
+        "StuID": "2321",
+        "status": "submitted",
+        "marks": null
+      },
+      {
+        "StuID": "2322",
+        "status": "graded",
+        "marks": 83
+      },
+      {
+        "StuID": "2323",
+        "status": "graded",
         "marks": 100
+      },
+      {
+        "StuID": "2324",
+        "status": "graded",
+        "marks": 100
+      }
+    ],
+    "StFl": "A",
+    "CrAt": "2026-07-28 09:46:35.744289+00:00"
+  },
+  {
+    "CmAssID": "AS023",
+    "InId": "IN001",
+    "PrID": "PR001",
+    "CrID": "CR003",
+    "DeptID": "DP002",
+    "SemID": "SM001",
+    "SecID": "SC001",
+    "AcYr": "AY2526",
+    "Title": "Constitutional Law — Quiz",
+    "Catry": "Quiz",
+    "SubID": "SB005",
+    "SubNa": "Constitutional Law",
+    "StaffID": "ST004",
+    "StaffNa": "Rithy Ngo",
+    "assgndDt": "2026-07-09",
+    "assgnDueDt": "2026-07-16",
+    "endTme": "23:59",
+    "maxMarks": 100,
+    "Students": [
+      {
+        "StuID": "2317",
+        "status": "graded",
+        "marks": 81
+      },
+      {
+        "StuID": "2318",
+        "status": "graded",
+        "marks": 78
+      },
+      {
+        "StuID": "2319",
+        "status": "graded",
+        "marks": 77
+      },
+      {
+        "StuID": "2320",
+        "status": "graded",
+        "marks": 99
+      },
+      {
+        "StuID": "2321",
+        "status": "graded",
+        "marks": 73
+      },
+      {
+        "StuID": "2322",
+        "status": "submitted",
+        "marks": null
+      },
+      {
+        "StuID": "2323",
+        "status": "graded",
+        "marks": 81
+      },
+      {
+        "StuID": "2324",
+        "status": "submitted",
+        "marks": null
+      }
+    ],
+    "StFl": "A",
+    "CrAt": "2026-07-28 09:46:35.744318+00:00"
+  },
+  {
+    "CmAssID": "AS024",
+    "InId": "IN001",
+    "PrID": "PR001",
+    "CrID": "CR003",
+    "DeptID": "DP002",
+    "SemID": "SM001",
+    "SecID": "SC001",
+    "AcYr": "AY2526",
+    "Title": "Constitutional Law — Exam",
+    "Catry": "Exam",
+    "SubID": "SB005",
+    "SubNa": "Constitutional Law",
+    "StaffID": "ST004",
+    "StaffNa": "Rithy Ngo",
+    "assgndDt": "2026-07-16",
+    "assgnDueDt": "2026-07-23",
+    "endTme": "23:59",
+    "maxMarks": 100,
+    "Students": [
+      {
+        "StuID": "2317",
+        "status": "graded",
+        "marks": 88
+      },
+      {
+        "StuID": "2318",
+        "status": "graded",
+        "marks": 48
+      },
+      {
+        "StuID": "2319",
+        "status": "graded",
+        "marks": 68
+      },
+      {
+        "StuID": "2320",
+        "status": "graded",
+        "marks": 47
+      },
+      {
+        "StuID": "2321",
+        "status": "graded",
+        "marks": 56
+      },
+      {
+        "StuID": "2322",
+        "status": "graded",
+        "marks": 90
+      },
+      {
+        "StuID": "2323",
+        "status": "graded",
+        "marks": 90
+      },
+      {
+        "StuID": "2324",
+        "status": "submitted",
+        "marks": null
+      }
+    ],
+    "StFl": "A",
+    "CrAt": "2026-07-28 09:46:35.744341+00:00"
+  },
+  {
+    "CmAssID": "AS025",
+    "InId": "IN001",
+    "PrID": "PR001",
+    "CrID": "CR003",
+    "DeptID": "DP002",
+    "SemID": "SM001",
+    "SecID": "SC001",
+    "AcYr": "AY2526",
+    "Title": "Constitutional Law — Project",
+    "Catry": "Project",
+    "SubID": "SB005",
+    "SubNa": "Constitutional Law",
+    "StaffID": "ST004",
+    "StaffNa": "Rithy Ngo",
+    "assgndDt": "2026-07-24",
+    "assgnDueDt": "2026-07-31",
+    "endTme": "23:59",
+    "maxMarks": 100,
+    "Students": [
+      {
+        "StuID": "2317",
+        "status": "assigned",
+        "marks": null
+      },
+      {
+        "StuID": "2318",
+        "status": "assigned",
+        "marks": null
+      },
+      {
+        "StuID": "2319",
+        "status": "assigned",
+        "marks": null
+      },
+      {
+        "StuID": "2320",
+        "status": "submitted",
+        "marks": null
+      },
+      {
+        "StuID": "2321",
+        "status": "submitted",
+        "marks": null
+      },
+      {
+        "StuID": "2322",
+        "status": "submitted",
+        "marks": null
+      },
+      {
+        "StuID": "2323",
+        "status": "submitted",
+        "marks": null
+      },
+      {
+        "StuID": "2324",
+        "status": "submitted",
+        "marks": null
+      }
+    ],
+    "StFl": "A",
+    "CrAt": "2026-07-28 09:46:35.744365+00:00"
+  },
+  {
+    "CmAssID": "AS026",
+    "InId": "IN001",
+    "PrID": "PR001",
+    "CrID": "CR003",
+    "DeptID": "DP002",
+    "SemID": "SM001",
+    "SecID": "SC001",
+    "AcYr": "AY2526",
+    "Title": "Criminal Law — Homework",
+    "Catry": "Homework",
+    "SubID": "SB006",
+    "SubNa": "Criminal Law",
+    "StaffID": "ST004",
+    "StaffNa": "Rithy Ngo",
+    "assgndDt": "2026-06-24",
+    "assgnDueDt": "2026-07-01",
+    "endTme": "23:59",
+    "maxMarks": 100,
+    "Students": [
+      {
+        "StuID": "2317",
+        "status": "submitted",
+        "marks": null
+      },
+      {
+        "StuID": "2318",
+        "status": "submitted",
+        "marks": null
+      },
+      {
+        "StuID": "2319",
+        "status": "graded",
+        "marks": 77
+      },
+      {
+        "StuID": "2320",
+        "status": "graded",
+        "marks": 87
+      },
+      {
+        "StuID": "2321",
+        "status": "graded",
+        "marks": 64
+      },
+      {
+        "StuID": "2322",
+        "status": "graded",
+        "marks": 88
+      },
+      {
+        "StuID": "2323",
+        "status": "graded",
+        "marks": 93
+      },
+      {
+        "StuID": "2324",
+        "status": "submitted",
+        "marks": null
+      }
+    ],
+    "StFl": "A",
+    "CrAt": "2026-07-28 09:46:35.744391+00:00"
+  },
+  {
+    "CmAssID": "AS027",
+    "InId": "IN001",
+    "PrID": "PR001",
+    "CrID": "CR003",
+    "DeptID": "DP002",
+    "SemID": "SM001",
+    "SecID": "SC001",
+    "AcYr": "AY2526",
+    "Title": "Criminal Law — Homework",
+    "Catry": "Homework",
+    "SubID": "SB006",
+    "SubNa": "Criminal Law",
+    "StaffID": "ST004",
+    "StaffNa": "Rithy Ngo",
+    "assgndDt": "2026-07-02",
+    "assgnDueDt": "2026-07-09",
+    "endTme": "23:59",
+    "maxMarks": 100,
+    "Students": [
+      {
+        "StuID": "2317",
+        "status": "graded",
+        "marks": 94
+      },
+      {
+        "StuID": "2318",
+        "status": "graded",
+        "marks": 94
       },
       {
         "StuID": "2319",
@@ -477,22 +1701,22 @@
       {
         "StuID": "2320",
         "status": "graded",
-        "marks": null
+        "marks": 83
       },
       {
         "StuID": "2321",
-        "status": "graded",
+        "status": "submitted",
         "marks": null
       },
       {
         "StuID": "2322",
-        "status": "graded",
+        "status": "assigned",
         "marks": null
       },
       {
         "StuID": "2323",
-        "status": "assigned",
-        "marks": 100
+        "status": "submitted",
+        "marks": null
       },
       {
         "StuID": "2324",
@@ -501,10 +1725,202 @@
       }
     ],
     "StFl": "A",
-    "CrAt": "2026-07-13 00:00:00+00:00"
+    "CrAt": "2026-07-28 09:46:35.744415+00:00"
   },
   {
-    "CmAssID": "AS009",
+    "CmAssID": "AS028",
+    "InId": "IN001",
+    "PrID": "PR001",
+    "CrID": "CR003",
+    "DeptID": "DP002",
+    "SemID": "SM001",
+    "SecID": "SC001",
+    "AcYr": "AY2526",
+    "Title": "Criminal Law — Quiz",
+    "Catry": "Quiz",
+    "SubID": "SB006",
+    "SubNa": "Criminal Law",
+    "StaffID": "ST004",
+    "StaffNa": "Rithy Ngo",
+    "assgndDt": "2026-07-09",
+    "assgnDueDt": "2026-07-16",
+    "endTme": "23:59",
+    "maxMarks": 100,
+    "Students": [
+      {
+        "StuID": "2317",
+        "status": "graded",
+        "marks": 89
+      },
+      {
+        "StuID": "2318",
+        "status": "graded",
+        "marks": 85
+      },
+      {
+        "StuID": "2319",
+        "status": "submitted",
+        "marks": null
+      },
+      {
+        "StuID": "2320",
+        "status": "graded",
+        "marks": 64
+      },
+      {
+        "StuID": "2321",
+        "status": "graded",
+        "marks": 77
+      },
+      {
+        "StuID": "2322",
+        "status": "graded",
+        "marks": 69
+      },
+      {
+        "StuID": "2323",
+        "status": "graded",
+        "marks": 73
+      },
+      {
+        "StuID": "2324",
+        "status": "graded",
+        "marks": 100
+      }
+    ],
+    "StFl": "A",
+    "CrAt": "2026-07-28 09:46:35.744438+00:00"
+  },
+  {
+    "CmAssID": "AS029",
+    "InId": "IN001",
+    "PrID": "PR001",
+    "CrID": "CR003",
+    "DeptID": "DP002",
+    "SemID": "SM001",
+    "SecID": "SC001",
+    "AcYr": "AY2526",
+    "Title": "Criminal Law — Exam",
+    "Catry": "Exam",
+    "SubID": "SB006",
+    "SubNa": "Criminal Law",
+    "StaffID": "ST004",
+    "StaffNa": "Rithy Ngo",
+    "assgndDt": "2026-07-16",
+    "assgnDueDt": "2026-07-23",
+    "endTme": "23:59",
+    "maxMarks": 100,
+    "Students": [
+      {
+        "StuID": "2317",
+        "status": "graded",
+        "marks": 71
+      },
+      {
+        "StuID": "2318",
+        "status": "assigned",
+        "marks": null
+      },
+      {
+        "StuID": "2319",
+        "status": "graded",
+        "marks": 53
+      },
+      {
+        "StuID": "2320",
+        "status": "graded",
+        "marks": 71
+      },
+      {
+        "StuID": "2321",
+        "status": "graded",
+        "marks": 86
+      },
+      {
+        "StuID": "2322",
+        "status": "graded",
+        "marks": 57
+      },
+      {
+        "StuID": "2323",
+        "status": "graded",
+        "marks": 96
+      },
+      {
+        "StuID": "2324",
+        "status": "graded",
+        "marks": 78
+      }
+    ],
+    "StFl": "A",
+    "CrAt": "2026-07-28 09:46:35.744469+00:00"
+  },
+  {
+    "CmAssID": "AS030",
+    "InId": "IN001",
+    "PrID": "PR001",
+    "CrID": "CR003",
+    "DeptID": "DP002",
+    "SemID": "SM001",
+    "SecID": "SC001",
+    "AcYr": "AY2526",
+    "Title": "Criminal Law — Project",
+    "Catry": "Project",
+    "SubID": "SB006",
+    "SubNa": "Criminal Law",
+    "StaffID": "ST004",
+    "StaffNa": "Rithy Ngo",
+    "assgndDt": "2026-07-24",
+    "assgnDueDt": "2026-07-31",
+    "endTme": "23:59",
+    "maxMarks": 100,
+    "Students": [
+      {
+        "StuID": "2317",
+        "status": "submitted",
+        "marks": null
+      },
+      {
+        "StuID": "2318",
+        "status": "assigned",
+        "marks": null
+      },
+      {
+        "StuID": "2319",
+        "status": "assigned",
+        "marks": null
+      },
+      {
+        "StuID": "2320",
+        "status": "submitted",
+        "marks": null
+      },
+      {
+        "StuID": "2321",
+        "status": "assigned",
+        "marks": null
+      },
+      {
+        "StuID": "2322",
+        "status": "assigned",
+        "marks": null
+      },
+      {
+        "StuID": "2323",
+        "status": "submitted",
+        "marks": null
+      },
+      {
+        "StuID": "2324",
+        "status": "submitted",
+        "marks": null
+      }
+    ],
+    "StFl": "A",
+    "CrAt": "2026-07-28 09:46:35.744491+00:00"
+  },
+  {
+    "CmAssID": "AS031",
     "InId": "IN001",
     "PrID": "PR001",
     "CrID": "CR004",
@@ -512,52 +1928,53 @@
     "SemID": "SM001",
     "SecID": "SC001",
     "AcYr": "AY2526",
-    "Title": "Microeconomics — Homework 1",
+    "Title": "Microeconomics — Homework",
     "Catry": "Homework",
     "SubID": "SB007",
     "SubNa": "Microeconomics",
     "StaffID": "ST005",
     "StaffNa": "Bunly Voun",
-    "assgndDt": "2026-06-29",
-    "assgnDueDt": "2026-07-09",
+    "assgndDt": "2026-06-24",
+    "assgnDueDt": "2026-07-01",
     "endTme": "23:59",
+    "maxMarks": 100,
     "Students": [
       {
         "StuID": "2325",
-        "status": "assigned",
-        "marks": null
+        "status": "graded",
+        "marks": 79
       },
       {
         "StuID": "2326",
-        "status": "assigned",
-        "marks": null
+        "status": "graded",
+        "marks": 79
       },
       {
         "StuID": "2327",
-        "status": "submitted",
-        "marks": null
+        "status": "graded",
+        "marks": 76
       },
       {
         "StuID": "2328",
-        "status": "assigned",
-        "marks": null
+        "status": "graded",
+        "marks": 83
       },
       {
         "StuID": "2329",
-        "status": "graded",
+        "status": "assigned",
         "marks": null
       },
       {
         "StuID": "2330",
-        "status": "assigned",
-        "marks": 65
+        "status": "submitted",
+        "marks": null
       }
     ],
     "StFl": "A",
-    "CrAt": "2026-07-13 00:00:00+00:00"
+    "CrAt": "2026-07-28 09:46:35.744519+00:00"
   },
   {
-    "CmAssID": "AS010",
+    "CmAssID": "AS032",
     "InId": "IN001",
     "PrID": "PR001",
     "CrID": "CR004",
@@ -565,52 +1982,107 @@
     "SemID": "SM001",
     "SecID": "SC001",
     "AcYr": "AY2526",
-    "Title": "Microeconomics — Quiz 2",
+    "Title": "Microeconomics — Homework",
+    "Catry": "Homework",
+    "SubID": "SB007",
+    "SubNa": "Microeconomics",
+    "StaffID": "ST005",
+    "StaffNa": "Bunly Voun",
+    "assgndDt": "2026-07-02",
+    "assgnDueDt": "2026-07-09",
+    "endTme": "23:59",
+    "maxMarks": 100,
+    "Students": [
+      {
+        "StuID": "2325",
+        "status": "graded",
+        "marks": 82
+      },
+      {
+        "StuID": "2326",
+        "status": "graded",
+        "marks": 70
+      },
+      {
+        "StuID": "2327",
+        "status": "graded",
+        "marks": 70
+      },
+      {
+        "StuID": "2328",
+        "status": "submitted",
+        "marks": null
+      },
+      {
+        "StuID": "2329",
+        "status": "graded",
+        "marks": 71
+      },
+      {
+        "StuID": "2330",
+        "status": "submitted",
+        "marks": null
+      }
+    ],
+    "StFl": "A",
+    "CrAt": "2026-07-28 09:46:35.744544+00:00"
+  },
+  {
+    "CmAssID": "AS033",
+    "InId": "IN001",
+    "PrID": "PR001",
+    "CrID": "CR004",
+    "DeptID": "DP003",
+    "SemID": "SM001",
+    "SecID": "SC001",
+    "AcYr": "AY2526",
+    "Title": "Microeconomics — Quiz",
     "Catry": "Quiz",
     "SubID": "SB007",
     "SubNa": "Microeconomics",
     "StaffID": "ST005",
     "StaffNa": "Bunly Voun",
-    "assgndDt": "2026-06-30",
-    "assgnDueDt": "2026-07-10",
+    "assgndDt": "2026-07-09",
+    "assgnDueDt": "2026-07-16",
     "endTme": "23:59",
+    "maxMarks": 100,
     "Students": [
       {
         "StuID": "2325",
-        "status": "submitted",
-        "marks": 99
+        "status": "graded",
+        "marks": 69
       },
       {
         "StuID": "2326",
-        "status": "assigned",
-        "marks": 91
+        "status": "graded",
+        "marks": 67
       },
       {
         "StuID": "2327",
-        "status": "assigned",
-        "marks": null
+        "status": "graded",
+        "marks": 80
       },
       {
         "StuID": "2328",
         "status": "graded",
-        "marks": null
+        "marks": 88
       },
       {
         "StuID": "2329",
-        "status": "submitted",
-        "marks": null
+        "status": "graded",
+        "marks": 71
       },
       {
         "StuID": "2330",
-        "status": "submitted",
-        "marks": null
+        "status": "graded",
+        "marks": 62
       }
     ],
     "StFl": "A",
-    "CrAt": "2026-07-13 00:00:00+00:00"
+    "CrAt": "2026-07-28 09:46:35.744566+00:00"
   },
   {
-    "CmAssID": "AS011",
+    "CmAssID": "AS034",
     "InId": "IN001",
     "PrID": "PR001",
     "CrID": "CR004",
@@ -618,20 +2090,75 @@
     "SemID": "SM001",
     "SecID": "SC001",
     "AcYr": "AY2526",
-    "Title": "Statistics — Homework 1",
-    "Catry": "Homework",
-    "SubID": "SB008",
-    "SubNa": "Statistics",
-    "StaffID": "ST006",
-    "StaffNa": "Sovann Pich",
-    "assgndDt": "2026-07-01",
-    "assgnDueDt": "2026-07-11",
+    "Title": "Microeconomics — Exam",
+    "Catry": "Exam",
+    "SubID": "SB007",
+    "SubNa": "Microeconomics",
+    "StaffID": "ST005",
+    "StaffNa": "Bunly Voun",
+    "assgndDt": "2026-07-16",
+    "assgnDueDt": "2026-07-23",
     "endTme": "23:59",
+    "maxMarks": 100,
+    "Students": [
+      {
+        "StuID": "2325",
+        "status": "graded",
+        "marks": 67
+      },
+      {
+        "StuID": "2326",
+        "status": "graded",
+        "marks": 73
+      },
+      {
+        "StuID": "2327",
+        "status": "graded",
+        "marks": 55
+      },
+      {
+        "StuID": "2328",
+        "status": "graded",
+        "marks": 52
+      },
+      {
+        "StuID": "2329",
+        "status": "assigned",
+        "marks": null
+      },
+      {
+        "StuID": "2330",
+        "status": "graded",
+        "marks": 76
+      }
+    ],
+    "StFl": "A",
+    "CrAt": "2026-07-28 09:46:35.744590+00:00"
+  },
+  {
+    "CmAssID": "AS035",
+    "InId": "IN001",
+    "PrID": "PR001",
+    "CrID": "CR004",
+    "DeptID": "DP003",
+    "SemID": "SM001",
+    "SecID": "SC001",
+    "AcYr": "AY2526",
+    "Title": "Microeconomics — Project",
+    "Catry": "Project",
+    "SubID": "SB007",
+    "SubNa": "Microeconomics",
+    "StaffID": "ST005",
+    "StaffNa": "Bunly Voun",
+    "assgndDt": "2026-07-24",
+    "assgnDueDt": "2026-07-31",
+    "endTme": "23:59",
+    "maxMarks": 100,
     "Students": [
       {
         "StuID": "2325",
         "status": "submitted",
-        "marks": 82
+        "marks": null
       },
       {
         "StuID": "2326",
@@ -640,12 +2167,12 @@
       },
       {
         "StuID": "2327",
-        "status": "graded",
+        "status": "submitted",
         "marks": null
       },
       {
         "StuID": "2328",
-        "status": "submitted",
+        "status": "assigned",
         "marks": null
       },
       {
@@ -655,11 +2182,281 @@
       },
       {
         "StuID": "2330",
-        "status": "submitted",
+        "status": "assigned",
         "marks": null
       }
     ],
     "StFl": "A",
-    "CrAt": "2026-07-13 00:00:00+00:00"
+    "CrAt": "2026-07-28 09:46:35.744613+00:00"
+  },
+  {
+    "CmAssID": "AS036",
+    "InId": "IN001",
+    "PrID": "PR001",
+    "CrID": "CR004",
+    "DeptID": "DP003",
+    "SemID": "SM001",
+    "SecID": "SC001",
+    "AcYr": "AY2526",
+    "Title": "Statistics — Homework",
+    "Catry": "Homework",
+    "SubID": "SB008",
+    "SubNa": "Statistics",
+    "StaffID": "ST006",
+    "StaffNa": "Sovann Pich",
+    "assgndDt": "2026-06-24",
+    "assgnDueDt": "2026-07-01",
+    "endTme": "23:59",
+    "maxMarks": 100,
+    "Students": [
+      {
+        "StuID": "2325",
+        "status": "graded",
+        "marks": 78
+      },
+      {
+        "StuID": "2326",
+        "status": "graded",
+        "marks": 78
+      },
+      {
+        "StuID": "2327",
+        "status": "assigned",
+        "marks": null
+      },
+      {
+        "StuID": "2328",
+        "status": "submitted",
+        "marks": null
+      },
+      {
+        "StuID": "2329",
+        "status": "assigned",
+        "marks": null
+      },
+      {
+        "StuID": "2330",
+        "status": "graded",
+        "marks": 96
+      }
+    ],
+    "StFl": "A",
+    "CrAt": "2026-07-28 09:46:35.744636+00:00"
+  },
+  {
+    "CmAssID": "AS037",
+    "InId": "IN001",
+    "PrID": "PR001",
+    "CrID": "CR004",
+    "DeptID": "DP003",
+    "SemID": "SM001",
+    "SecID": "SC001",
+    "AcYr": "AY2526",
+    "Title": "Statistics — Homework",
+    "Catry": "Homework",
+    "SubID": "SB008",
+    "SubNa": "Statistics",
+    "StaffID": "ST006",
+    "StaffNa": "Sovann Pich",
+    "assgndDt": "2026-07-02",
+    "assgnDueDt": "2026-07-09",
+    "endTme": "23:59",
+    "maxMarks": 100,
+    "Students": [
+      {
+        "StuID": "2325",
+        "status": "submitted",
+        "marks": null
+      },
+      {
+        "StuID": "2326",
+        "status": "assigned",
+        "marks": null
+      },
+      {
+        "StuID": "2327",
+        "status": "graded",
+        "marks": 67
+      },
+      {
+        "StuID": "2328",
+        "status": "submitted",
+        "marks": null
+      },
+      {
+        "StuID": "2329",
+        "status": "assigned",
+        "marks": null
+      },
+      {
+        "StuID": "2330",
+        "status": "graded",
+        "marks": 95
+      }
+    ],
+    "StFl": "A",
+    "CrAt": "2026-07-28 09:46:35.744659+00:00"
+  },
+  {
+    "CmAssID": "AS038",
+    "InId": "IN001",
+    "PrID": "PR001",
+    "CrID": "CR004",
+    "DeptID": "DP003",
+    "SemID": "SM001",
+    "SecID": "SC001",
+    "AcYr": "AY2526",
+    "Title": "Statistics — Quiz",
+    "Catry": "Quiz",
+    "SubID": "SB008",
+    "SubNa": "Statistics",
+    "StaffID": "ST006",
+    "StaffNa": "Sovann Pich",
+    "assgndDt": "2026-07-09",
+    "assgnDueDt": "2026-07-16",
+    "endTme": "23:59",
+    "maxMarks": 100,
+    "Students": [
+      {
+        "StuID": "2325",
+        "status": "graded",
+        "marks": 61
+      },
+      {
+        "StuID": "2326",
+        "status": "graded",
+        "marks": 74
+      },
+      {
+        "StuID": "2327",
+        "status": "graded",
+        "marks": 65
+      },
+      {
+        "StuID": "2328",
+        "status": "graded",
+        "marks": 98
+      },
+      {
+        "StuID": "2329",
+        "status": "graded",
+        "marks": 97
+      },
+      {
+        "StuID": "2330",
+        "status": "graded",
+        "marks": 77
+      }
+    ],
+    "StFl": "A",
+    "CrAt": "2026-07-28 09:46:35.744680+00:00"
+  },
+  {
+    "CmAssID": "AS039",
+    "InId": "IN001",
+    "PrID": "PR001",
+    "CrID": "CR004",
+    "DeptID": "DP003",
+    "SemID": "SM001",
+    "SecID": "SC001",
+    "AcYr": "AY2526",
+    "Title": "Statistics — Exam",
+    "Catry": "Exam",
+    "SubID": "SB008",
+    "SubNa": "Statistics",
+    "StaffID": "ST006",
+    "StaffNa": "Sovann Pich",
+    "assgndDt": "2026-07-16",
+    "assgnDueDt": "2026-07-23",
+    "endTme": "23:59",
+    "maxMarks": 100,
+    "Students": [
+      {
+        "StuID": "2325",
+        "status": "graded",
+        "marks": 50
+      },
+      {
+        "StuID": "2326",
+        "status": "graded",
+        "marks": 73
+      },
+      {
+        "StuID": "2327",
+        "status": "graded",
+        "marks": 50
+      },
+      {
+        "StuID": "2328",
+        "status": "assigned",
+        "marks": null
+      },
+      {
+        "StuID": "2329",
+        "status": "graded",
+        "marks": 76
+      },
+      {
+        "StuID": "2330",
+        "status": "graded",
+        "marks": 83
+      }
+    ],
+    "StFl": "A",
+    "CrAt": "2026-07-28 09:46:35.744702+00:00"
+  },
+  {
+    "CmAssID": "AS040",
+    "InId": "IN001",
+    "PrID": "PR001",
+    "CrID": "CR004",
+    "DeptID": "DP003",
+    "SemID": "SM001",
+    "SecID": "SC001",
+    "AcYr": "AY2526",
+    "Title": "Statistics — Project",
+    "Catry": "Project",
+    "SubID": "SB008",
+    "SubNa": "Statistics",
+    "StaffID": "ST006",
+    "StaffNa": "Sovann Pich",
+    "assgndDt": "2026-07-24",
+    "assgnDueDt": "2026-07-31",
+    "endTme": "23:59",
+    "maxMarks": 100,
+    "Students": [
+      {
+        "StuID": "2325",
+        "status": "assigned",
+        "marks": null
+      },
+      {
+        "StuID": "2326",
+        "status": "assigned",
+        "marks": null
+      },
+      {
+        "StuID": "2327",
+        "status": "submitted",
+        "marks": null
+      },
+      {
+        "StuID": "2328",
+        "status": "assigned",
+        "marks": null
+      },
+      {
+        "StuID": "2329",
+        "status": "submitted",
+        "marks": null
+      },
+      {
+        "StuID": "2330",
+        "status": "assigned",
+        "marks": null
+      }
+    ],
+    "StFl": "A",
+    "CrAt": "2026-07-28 09:46:35.744723+00:00"
   }
 ]
