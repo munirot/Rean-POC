@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom'
 import { Row, Col, Card, Table, Badge } from 'react-bootstrap'
 import PageHeader from '../components/PageHeader'
 import Button from '../components/Button'
-import { api, todayStr } from '../api'
+import { api } from '../api'
+import { todayStr, fmtTime } from '../utils/time'
 import { getSession } from '../auth'
 import StudentDashboard from './StudentDashboard'
 
@@ -83,7 +84,7 @@ function StaffDashboard() {
                     <div className="fw-semibold text-primary">{r.name}</div>
                     <div className="text-secondary fs-2">{r.cls} · {r.session}</div>
                   </div>
-                  <div className="text-secondary fs-2">{r.ts ? new Date(r.ts).toLocaleTimeString() : ''}</div>
+                  <div className="text-secondary fs-2">{fmtTime(r.ts)}</div>
                 </div>
               )) : <div className="text-center text-secondary p-4">No check-ins yet today</div>}
             </Card.Body>

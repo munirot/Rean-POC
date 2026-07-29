@@ -3,6 +3,7 @@ import { Row, Col, Card, Badge } from 'react-bootstrap'
 import PageHeader from '../components/PageHeader'
 import Button from '../components/Button'
 import { api } from '../api'
+import { fmtDate } from '../utils/time'
 
 const SUGGESTIONS = [
   'How many students were absent today?',
@@ -110,7 +111,7 @@ export default function Chat() {
                   <div className="text-primary fs-3 text-truncate">{c.title}</div>
                   <div className="text-secondary fs-2">
                     {c.count} msg{c.count === 1 ? '' : 's'}
-                    {c.updatedAt ? ` · ${new Date(c.updatedAt).toLocaleDateString()}` : ''}
+                    {c.updatedAt ? ` · ${fmtDate(c.updatedAt)}` : ''}
                   </div>
                 </div>
               ))}

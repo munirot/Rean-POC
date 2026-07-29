@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Row, Col, Card, Table, Badge } from 'react-bootstrap'
 import PageHeader from '../components/PageHeader'
-import { api, todayStr } from '../api'
+import { api } from '../api'
+import { todayStr } from '../utils/time'
 
 // Signal code -> label + badge variant. 'at_risk' is the headline flag.
 const SIGNALS = {

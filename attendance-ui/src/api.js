@@ -80,5 +80,3 @@ export const api = {
     return j('/api/attendance/roster' + (q ? `?${q}` : ''))
   },
 }
-
-export const todayStr = () => new Date().toLocaleDateString('en-CA')

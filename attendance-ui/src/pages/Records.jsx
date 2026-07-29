@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { Card, Table, Form, Row, Col, Badge } from 'react-bootstrap'
 import PageHeader from '../components/PageHeader'
 import Button from '../components/Button'
-import { api, todayStr } from '../api'
+import { api } from '../api'
+import { todayStr, fmtTime } from '../utils/time'
 import { useToast } from '../components/Layout'
 import { getSession } from '../auth'
 
@@ -38,7 +39,7 @@ function RosterRecords() {
     const head = ['sid', 'name', 'class', 'date', 'checkedIn', 'status', 'time', 'source']
     const lines = [head.join(',')].concat((data?.students || []).map((r) => [
       r.sid, `"${r.name}"`, r.cls || '', date, r.checkedIn ? 'yes' : 'no',
-      r.status, r.time ? new Date(r.time).toLocaleTimeString() : '', r.source || '',
+      r.status, fmtTime(r.time), r.source || '',
     ].join(',')))
     const a = document.createElement('a')
     a.href = URL.createObjectURL(new Blob([lines.join('\n')], { type: 'text/csv' }))
@@ -107,7 +108,7 @@ function RosterRecords() {
                   <td className="fs-3 p-3 text-secondary">{r.sid}</td>
                   <td className="fs-3 p-3">{r.cls}</td>
                   <td className="fs-3 p-3">{statusBadge(r)}</td>
-                  <td className="fs-3 p-3">{r.time ? new Date(r.time).toLocaleTimeString() : '—'}</td>
+                  <td className="fs-3 p-3">{fmtTime(r.time) || '—'}</td>
                   <td className="fs-3 p-3">{r.source ? <Badge bg="light" text="dark">{r.source}</Badge> : '—'}</td>
                 </tr>
               ))}
@@ -150,7 +151,7 @@ function MyRecords({ sid }) {
                   <td className="fs-3 p-3">{r.session}</td>
                   <td className="fs-3 p-3">{r.subNa || '—'}</td>
                   <td className="fs-3 p-3">{badge(r.status)}</td>
-                  <td className="fs-3 p-3">{r.ts ? new Date(r.ts).toLocaleTimeString() : '—'}</td>
+                  <td className="fs-3 p-3">{fmtTime(r.ts) || '—'}</td>
                   <td className="fs-3 p-3">{r.source ? <Badge bg="light" text="dark">{r.source}</Badge> : '—'}</td>
                 </tr>
               ))}
