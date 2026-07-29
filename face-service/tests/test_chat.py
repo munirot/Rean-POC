@@ -70,8 +70,8 @@ def test_map_get_attendance_defaults_today():
 
 
 def test_map_get_student_and_cohort():
-    assert chat.map_tool_call("get_student", {"student": "Dara"}) == \
-        {"action": "student_profile", "student": "Dara"}
+    s = chat.map_tool_call("get_student", {"student": "Dara"})
+    assert s["action"] == "student_profile" and s["student"] == "Dara"
     assert chat.map_tool_call("get_cohort", {"class_name": "Law"}) == \
         {"action": "cohort", "class": "Law"}
 
@@ -97,6 +97,100 @@ def test_first_tool_call_parses_string_arguments():
 
 def test_first_tool_call_none_when_no_calls():
     assert chat._first_tool_call({"content": "hello"}) == (None, None)
+
+
+# --------------------------------------------------------------------------- #
+# conversation context: pronoun follow-ups resolve to the prior student
+# --------------------------------------------------------------------------- #
+def test_mentions_person_ref():
+    assert chat._mentions_person_ref("how are his quizzes?")
+    assert chat._mentions_person_ref("what about that student")
+    assert not chat._mentions_person_ref("how many present today")
+
+
+class _RosterStore:
+    def __init__(self, roster):
+        self._roster = roster
+
+    def list_students(self, scope=None):
+        return self._roster
+
+
+def test_focus_student_resolves_last_mentioned():
+    store = _RosterStore([{"sid": "S1", "name": "Dara Sok"},
+                          {"sid": "S2", "name": "Sophea Chan"}])
+    history = [
+        {"role": "user", "content": "how is Dara Sok doing?"},
+        {"role": "assistant", "content": "Dara Sok: attendance 80%..."},
+    ]
+    foc = chat._focus_student(store, history, scope=None)
+    assert foc == {"sid": "S1", "name": "Dara Sok"}
+
+
+def test_focus_student_none_without_match():
+    store = _RosterStore([{"sid": "S1", "name": "Dara Sok"}])
+    history = [{"role": "user", "content": "how many present today?"}]
+    assert chat._focus_student(store, history, scope=None) is None
+
+
+# --------------------------------------------------------------------------- #
+# ambiguous / misspelled student names -> clarifying question
+# --------------------------------------------------------------------------- #
+_ROSTER = [
+    {"sid": "S1", "name": "Pisey Yem", "cls": "Class A"},
+    {"sid": "S2", "name": "Pesey Yen", "cls": "Class B"},
+    {"sid": "S3", "name": "Dara Sok", "cls": "Class A"},
+    {"sid": "S4", "name": "Dara Sok", "cls": "Class C"},
+]
+
+
+def test_match_single_exact():
+    matches, sugg = chat.match_students(_ROSTER, "Pisey Yem")
+    assert [m["sid"] for m in matches] == ["S1"] and sugg == []
+
+
+def test_match_ambiguous_same_name():
+    matches, sugg = chat.match_students(_ROSTER, "Dara Sok")
+    assert {m["sid"] for m in matches} == {"S3", "S4"}   # two students, one name
+
+
+def test_match_class_hint_disambiguates():
+    matches, _ = chat.match_students(_ROSTER, "Dara Sok", class_hint="Class C")
+    assert [m["sid"] for m in matches] == ["S4"]
+
+
+def test_match_typo_returns_suggestions():
+    matches, sugg = chat.match_students(_ROSTER, "Pesey Yem")   # typo
+    assert matches == []
+    assert {s["sid"] for s in sugg} >= {"S1", "S2"}            # both close names
+
+
+class _ClarifyStore:
+    def __init__(self, roster):
+        self._roster = roster
+
+    def list_students(self, scope=None):
+        return self._roster
+
+    def student_profile(self, sid):
+        return {"sid": sid, "name": "resolved"}
+
+
+def test_run_intent_asks_which_one_when_ambiguous():
+    store = _ClarifyStore(_ROSTER)
+    out = chat.run_intent(store, {"action": "student_profile", "student": "Dara Sok"},
+                          scope=None)
+    assert out["kind"] == "clarify" and out["exact"] is True
+    msg = chat._format_clarify(out)
+    assert "which one" in msg.lower() and "Class A" in msg and "Class C" in msg
+
+
+def test_run_intent_did_you_mean_on_typo():
+    store = _ClarifyStore(_ROSTER)
+    out = chat.run_intent(store, {"action": "student_profile", "student": "Pesey Yem"},
+                          scope=None)
+    assert out["kind"] == "clarify" and out["exact"] is False
+    assert "did you mean" in chat._format_clarify(out).lower()
 
 
 def test_attendance_summary_action_ok():
@@ -205,6 +299,13 @@ def test_pre_route_picks_up_explicit_date():
 
 def test_pre_route_ignores_non_attendance():
     assert chat.pre_route("who is missing assignments in law?") is None
+
+
+def test_pre_route_does_not_hijack_general_chat():
+    # "present" as a verb / general questions must fall through to the model
+    assert chat.pre_route("present a summary of this lesson") is None
+    assert chat.pre_route("what are good ways to boost engagement?") is None
+    assert chat.pre_route("can you help me plan a quiz?") is None
 
 
 # --------------------------------------------------------------------------- #

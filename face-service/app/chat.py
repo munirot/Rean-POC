@@ -16,6 +16,7 @@ use the fixed, tested functions from db.py — NOT generated queries.
 The LLM is any OpenAI-compatible endpoint; default is local Ollama so student
 data stays on-prem (see config.chat_*).
 """
+import difflib
 import json
 import re
 import urllib.request
@@ -35,21 +36,30 @@ ALLOWED = {
 ACTIONS = {"student_profile", "cohort", "query", "attendance_summary",
            "attendance_range", "answer"}
 
-SYSTEM_PROMPT = """You help school staff by answering questions about student \
-attendance and assignments. When a question needs data, CALL ONE of the provided \
-tools — never answer data questions from memory or make up numbers. The server \
-runs the tool and gives you the real result to phrase.
+SYSTEM_PROMPT = """You are a warm, knowledgeable assistant for school staff. Be \
+genuinely helpful and conversational — answer general questions, explain ideas, \
+brainstorm, and offer teaching advice using your own knowledge and judgment, just \
+like a capable colleague would.
 
-Guidance:
-- "how many present/absent", attendance rate, or anything about attendance for a
-  day or period -> get_attendance (pass the period phrase; the server resolves
-  the actual dates, so you never need to compute a date yourself).
-- "how is <student> doing", a student's record -> get_student.
-- "who is at risk / struggling in <class>" -> get_cohort.
-- Specific row lookups (e.g. how many quizzes in a subject) -> search_records.
-- If it is small talk or not about attendance/assignments, just reply directly
-  without calling a tool.
-Call at most one tool. Do not invent fields, students, or figures."""
+ONE hard rule: any specific fact about a REAL student — their attendance, grades,
+assignments, or risk status — must come from the tools, never from memory or
+guessing. When a question is about a specific student or this school's data, call
+the right tool and answer ONLY from what it returns. Never invent names, numbers,
+dates, or records. If the tools don't have it, say you don't have that data.
+
+Tools (call at most one, only when you need school data):
+- get_attendance(period): present/absent counts or attendance rate for a day or
+  period. Pass a phrase ("today", "last week", a date) — the server resolves the
+  real dates, so you never compute a date yourself.
+- get_student(student): one student's attendance, grades, and risk signals.
+- get_cohort(class_name): at-risk students in a class.
+- search_records(collection, filters, aggregation): count/list specific rows.
+
+For anything NOT about specific student/school data — greetings, general
+education questions, advice, definitions, brainstorming — just reply naturally,
+no tool needed. Use earlier messages for context: resolve "he/she/they/that
+student/what about .../his quizzes" to the student, class, or period discussed
+just before, rather than asking again. Call at most one tool per reply."""
 
 # OpenAI-style tool schemas. The model PICKS a tool; the server still resolves
 # dates and injects the caller's scope when it runs the tool (see run_intent).
@@ -65,9 +75,12 @@ TOOLS = [
             "required": []}}},
     {"type": "function", "function": {
         "name": "get_student",
-        "description": "One student's full record: attendance, grades, risk signals.",
+        "description": "One student's full record: attendance, grades, risk signals. "
+                       "If several students share a name, the server will ask which one.",
         "parameters": {"type": "object", "properties": {
-            "student": {"type": "string", "description": "Student name or ID."}},
+            "student": {"type": "string", "description": "Student name or ID."},
+            "class_name": {"type": "string",
+                           "description": "Optional class/course to disambiguate a shared name."}},
             "required": ["student"]}}},
     {"type": "function", "function": {
         "name": "get_cohort",
@@ -95,7 +108,8 @@ def map_tool_call(name, args):
     if name == "get_attendance":
         return {"action": "attendance_summary", "date": args.get("period") or "today"}
     if name == "get_student":
-        return {"action": "student_profile", "student": args.get("student", "")}
+        return {"action": "student_profile", "student": args.get("student", ""),
+                "class_hint": args.get("class_name")}
     if name == "get_cohort":
         return {"action": "cohort", "class": args.get("class_name") or args.get("class", "")}
     if name == "search_records":
@@ -110,7 +124,8 @@ def map_tool_call(name, args):
 # Returns the full assistant message so callers can read tool_calls or content.
 # --------------------------------------------------------------------------- #
 def _chat_completion(messages, tools=None, force_json=False):
-    payload = {"model": settings.chat_model, "messages": messages, "temperature": 0.2}
+    payload = {"model": settings.chat_model, "messages": messages,
+               "temperature": settings.chat_temperature}
     if tools:
         payload["tools"] = tools
         payload["tool_choice"] = "auto"
@@ -156,8 +171,14 @@ def _first_tool_call(message):
 # against the server clock and never trust the LLM for dates.
 # --------------------------------------------------------------------------- #
 _DATE_RE = re.compile(r"\b(\d{4}-\d{2}-\d{2})\b")
-_ATTN_WORDS = ("absent", "present", "attendance", "attended", "turnout",
-               "how many showed", "who showed up", "checked in", "check-in")
+# attendance nouns/verbs that signal the topic
+_ATTN_WORDS = ("absent", "absence", "attendance", "attended", "turnout",
+               "showed up", "checked in", "check-in", "present today",
+               "present in", "were present", "are present", "who is present",
+               "how many present", "how many are present")
+# quantity cues that make it a *count* question (avoids "present a summary" etc.)
+_QUANT_WORDS = ("how many", "number of", "count", "rate", "how's attendance",
+                "attendance for")
 # phrases that, on their own, mean "apply the previous question to this period"
 _PERIOD_WORDS = ("today", "yesterday", "this week", "last week", "past week",
                  "last 7 days", "previous week", "this month", "last month")
@@ -167,7 +188,7 @@ def resolve_period(text, today=None):
     """Resolve a date phrase to a concrete day or range. Returns
     {"type":"day","date":"YYYY-MM-DD","label":...} or
     {"type":"range","start":...,"end":...,"label":...} or None."""
-    today = today or _date.today()
+    today = today or settings.now_local().date()
     q = (text or "").lower()
 
     m = _DATE_RE.search(text or "")
@@ -218,20 +239,23 @@ def _prev_was_attendance(history):
 
 
 def pre_route(question, history=None, today=None):
-    """Return an intent for questions we can route deterministically, else None.
-    Handles follow-ups like "what about last week" by carrying the attendance
-    topic forward from the previous turn."""
+    """Deterministically route only *clear* attendance-count questions (so a 0
+    can't be spun and dates can't be hallucinated). Everything else — including
+    general chat — falls through to the smart model. Follow-ups like "what about
+    last week" continue an attendance conversation."""
     q = question.lower()
-    is_attn = any(w in q for w in _ATTN_WORDS)
+    has_attn = any(w in q for w in _ATTN_WORDS)
+    has_quant = any(c in q for c in _QUANT_WORDS)
     period = resolve_period(question, today=today)
-    followup = period is not None and any(w in q for w in _PERIOD_WORDS)
 
-    # attendance question with or without an explicit period
-    if is_attn:
+    # A clear attendance-count question needs the attendance topic AND either a
+    # counting cue or an explicit period — this avoids hijacking "present a
+    # lesson summary" and similar general phrasing.
+    if has_attn and (has_quant or period):
         return _period_to_intent(period) if period else \
             {"action": "attendance_summary", "date": "today", "_label": "today"}
-    # bare period follow-up continuing an attendance conversation
-    if followup and _prev_was_attendance(history):
+    # bare period follow-up ("what about last week?") after an attendance turn
+    if period and any(w in q for w in _PERIOD_WORDS) and _prev_was_attendance(history):
         return _period_to_intent(period)
     return None
 
@@ -282,6 +306,41 @@ def _apply_op(op, value):
         else {"$gte": value} if op == "gte" else {"$lte": value}
 
 
+def match_students(roster, query, class_hint=None):
+    """Find candidate students for a name/id query. Pure — testable without a DB.
+    Returns (matches, suggestions):
+      - matches: strong matches (exact id/name or clear substring); 1 => resolved,
+        >1 => ambiguous (ask which one).
+      - suggestions: fuzzy near-matches when there is no strong match (typos).
+    """
+    q = (query or "").strip().lower()
+    rows = [(s, (s.get("name") or "").lower(), str(s.get("sid", "")).lower())
+            for s in roster]
+    strong = []
+    for s, nm, sid in rows:
+        if not q:
+            continue
+        if q == sid or q == nm or (len(q) >= 3 and q in nm):
+            strong.append(s)
+    if class_hint:
+        ch = str(class_hint).strip().lower()
+        filtered = [s for s in strong if ch in (s.get("cls") or "").lower()]
+        if filtered:
+            strong = filtered
+    if strong:
+        # de-dup by sid, preserve order
+        seen, uniq = set(), []
+        for s in strong:
+            if s["sid"] not in seen:
+                seen.add(s["sid"])
+                uniq.append(s)
+        return uniq, []
+    # no strong match -> fuzzy suggestions on full names (handles typos)
+    close = difflib.get_close_matches(q, [nm for _, nm, _ in rows], n=6, cutoff=0.6)
+    sugg = [s for s, nm, _ in rows if nm in close]
+    return [], sugg
+
+
 def _assignment_scope(scope):
     """Scope fragment for the assignments collection."""
     if not scope:
@@ -303,15 +362,19 @@ def run_intent(store, intent, scope):
         return {"kind": "answer", "text": intent.get("text", "")}
 
     if action == "student_profile":
-        who = str(intent.get("student", "")).strip().lower()
-        match = None
-        for s in store.list_students(scope=scope):   # already scope-filtered
-            if who and (who == str(s["sid"]).lower() or who in (s["name"] or "").lower()):
-                match = s
-                break
-        if not match:
-            return {"kind": "not_found", "text": f"No student matching '{intent.get('student')}' in your access."}
-        return {"kind": "student_profile", "data": store.student_profile(match["sid"])}
+        who = intent.get("student", "")
+        roster = store.list_students(scope=scope)   # already scope-filtered
+        matches, suggestions = match_students(roster, who, intent.get("class_hint"))
+        if len(matches) == 1:
+            return {"kind": "student_profile", "data": store.student_profile(matches[0]["sid"])}
+        if len(matches) > 1:
+            return {"kind": "clarify", "query": who, "exact": True,
+                    "candidates": _candidate_list(matches)}
+        if suggestions:
+            return {"kind": "clarify", "query": who, "exact": False,
+                    "candidates": _candidate_list(suggestions)}
+        return {"kind": "not_found",
+                "text": f"I couldn't find a student matching '{who}' in your classes."}
 
     if action == "cohort":
         return {"kind": "cohort", "data": store.cohort_signals(intent.get("class", ""), scope=scope)}
@@ -358,6 +421,24 @@ def run_intent(store, intent, scope):
 def _safe(obj):
     """JSON-safe copy (drop ObjectId/embeddings/etc.)."""
     return json.loads(json.dumps(obj, default=str))
+
+
+def _candidate_list(rows, limit=6):
+    return [{"sid": s["sid"], "name": s.get("name"), "cls": s.get("cls")}
+            for s in rows[:limit]]
+
+
+def _format_clarify(result):
+    """A grounded clarifying question listing only real, in-scope students."""
+    q = result.get("query")
+    cands = result.get("candidates", [])
+    listed = "; ".join(
+        f"{c['name']} ({c.get('cls') or 'no class'}, ID {c['sid']})" for c in cands)
+    if result.get("exact"):
+        return (f"More than one student matches \"{q}\": {listed}. "
+                "Which one do you mean?")
+    return (f"I couldn't find an exact match for \"{q}\". Did you mean: {listed}? "
+            "Let me know which one.")
 
 
 # --------------------------------------------------------------------------- #
@@ -415,6 +496,9 @@ def _format_range(data, label=None):
 def _compose(question, result):
     if result["kind"] in ("answer", "not_found"):
         return result["text"]
+    # Ambiguous / misspelled student name -> deterministic clarifying question.
+    if result["kind"] == "clarify":
+        return _format_clarify(result)
     # Attendance figures are answered deterministically, never by the model.
     if result["kind"] == "attendance_summary":
         return _format_attendance(result["data"])
@@ -441,6 +525,37 @@ def _history_msgs(history, limit=6):
     return out
 
 
+# Pronouns / vague references that mean "the student we were just discussing".
+_PRONOUNS = (" he ", " him", " his ", " she ", " her", " they ", " them",
+             " their", "that student", "this student", "the student",
+             "same student")
+
+
+def _mentions_person_ref(text):
+    t = f" {text.lower()} "
+    return any(p in t for p in _PRONOUNS)
+
+
+def _focus_student(store, history, scope):
+    """Find the most recently discussed student in the conversation so pronoun
+    follow-ups resolve even if the model doesn't. Returns {sid,name} or None."""
+    if not history:
+        return None
+    try:
+        roster = store.list_students(scope=scope)   # scope-limited
+    except Exception:
+        return None
+    for m in reversed(history):
+        text = (m.get("content") or "").lower()
+        if not text:
+            continue
+        for s in roster:
+            nm = (s.get("name") or "").lower()
+            if (nm and nm in text) or str(s.get("sid", "")).lower() in text:
+                return {"sid": s["sid"], "name": s["name"]}
+    return None
+
+
 def answer(store, question, scope, context_sid=None, history=None):
     """Returns {answer, intent, error?}. Uses recent history for follow-ups and
     resolves all dates against the server clock. Degrades gracefully."""
@@ -448,6 +563,14 @@ def answer(store, question, scope, context_sid=None, history=None):
         return {"answer": "Chat is disabled on this server.", "intent": None}
     if context_sid:
         question = f"(current student on screen: {context_sid})\n{question}"
+
+    # Resolve pronoun/vague references to the student discussed earlier, so
+    # follow-ups like "how are his quizzes?" work regardless of model strength.
+    if history and _mentions_person_ref(question):
+        foc = _focus_student(store, history, scope)
+        if foc:
+            question = (f"(the student being discussed is {foc['name']}, "
+                        f"id {foc['sid']})\n{question}")
 
     # Deterministic shortcut for attendance/date questions — skips the LLM so it
     # can neither mis-route to a raw status query nor invent a date. Uses history
@@ -457,7 +580,7 @@ def answer(store, question, scope, context_sid=None, history=None):
         result = run_intent(store, routed, scope)
         return {"answer": _compose(question, result), "intent": routed}
 
-    today = _date.today().isoformat()
+    today = settings.now_local().date().isoformat()
     sys_prompt = SYSTEM_PROMPT + f"\n\nToday's date is {today}."
     try:
         message = _chat_completion(

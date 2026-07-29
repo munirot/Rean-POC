@@ -149,6 +149,9 @@ class Store:
             self.attn.create_index([("StuID", ASCENDING), ("date", ASCENDING),
                                     ("session", ASCENDING)])
             self.attn.create_index([("date", DESCENDING)])
+            self.chat_hist.create_index([("loginId", ASCENDING),
+                                         ("conversationId", ASCENDING),
+                                         ("ts", ASCENDING)])
             self.attn.create_index([("dateAt", DESCENDING)])  # native Date range queries
             self._indexed = True
 

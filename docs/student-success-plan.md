@@ -229,30 +229,49 @@ every query and ignores any attempt to override it; reads are capped at
 `CHAT_ROW_CAP`; the endpoint is staff/admin-only; answers are composed strictly
 from returned rows with the raw data shown for verification.
 
-### Choosing a model (tool-calling)
+### Smart, but grounded on student data
 
-The chat uses **tool calling**: the model picks one of a few described tools
-(`get_attendance`, `get_student`, `get_cohort`, `search_records`) and the server
-runs it — the server still resolves all dates and injects the caller's scope, so
-correctness and privacy do not depend on the model. This scales without adding
-per-question routing code: new capabilities are new tools, not new `if` branches.
+The assistant is deliberately two-natured:
 
-Because of this, use a **tool-capable** model. `qwen2.5:7b-instruct` (default)
-supports tools; for better intent/context understanding, try a larger local
-model — no code change, just:
+- **General intelligence, unrestricted.** Greetings, teaching advice, explaining
+  concepts, brainstorming — it answers naturally from its own knowledge, like a
+  capable colleague. No tool required.
+- **Student/school facts, hard-grounded.** Any claim about a *specific* student's
+  attendance, grades, assignments, or risk status must come from a tool. The
+  system prompt makes this a hard rule; the model calls `get_attendance`,
+  `get_student`, `get_cohort`, or `search_records`, and the server runs it —
+  still resolving dates and injecting the caller's scope. Numbers and dates never
+  come from the model.
+
+Clear attendance-count questions are additionally handled by a deterministic
+pre-router (so a 0 can't be spun and a date can't be hallucinated); it is
+intentionally narrow so it never hijacks general phrasing like "present a
+summary."
+
+### Choosing a model (tool-calling required)
+
+Grounding depends on **tool calling**, so use a tool-capable model. The default
+is **Gemma 4**, which is strong at reasoning *and* has native function calling
+through Ollama's OpenAI-compatible endpoint:
 
 ```bash
-ollama pull qwen2.5:14b-instruct     # or qwen2.5:32b-instruct
+ollama pull gemma4:12b        # or gemma4:e4b (lighter), gemma4:26b / :31b (stronger)
 ```
 ```
-CHAT_MODEL=qwen2.5:14b-instruct
+CHAT_MODEL=gemma4:12b
 ```
 
-Bigger models mainly improve the *understanding* (which tool, following a
-multi-turn thread) and *phrasing* — not the numbers, which are computed by the
-server. Attendance/date questions are still answered by a deterministic
-pre-router (works even with the model offline); tool calling covers the rest.
-Trade-off: larger models need more RAM/VRAM and are slower per reply.
+Notes:
+- Use the **official** `gemma4:*` tags and non-streaming calls (this service uses
+  non-streaming); some early third-party GGUFs / the streaming path had tool-call
+  bugs.
+- `qwen2.5:7b/14b/32b-instruct` and `llama3.1/3.3` also support tools if you
+  prefer them — just set `CHAT_MODEL`.
+- `CHAT_TEMPERATURE` (default 0.3) tunes creativity vs. determinism. Gemma 4's
+  own recommendation for open chat is higher (~1.0); keep it lower for crisp tool
+  routing.
+- Bigger models mainly improve *which tool* and *phrasing/context* — not the
+  numbers, which the server computes.
 
 ### Deployment note — read-only DB user
 

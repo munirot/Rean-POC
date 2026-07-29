@@ -32,8 +32,12 @@ class Settings:
     # data leaves the machine. Point CHAT_BASE_URL at OpenRouter/Groq/etc. to swap.
     chat_enabled: bool = _get("CHAT_ENABLED", "true").lower() == "true"
     chat_base_url: str = _get("CHAT_BASE_URL", "http://localhost:11434/v1")
-    chat_model: str = _get("CHAT_MODEL", "qwen2.5:7b-instruct")
+    
+    # Gemma 4 model
+    # Sizes: gemma4:e4b (~9.6GB) · gemma4:12b (~7.6GB) · gemma4:26b · gemma4:31b.
+    chat_model: str = _get("CHAT_MODEL", "gemma4:31b-cloud")
     chat_api_key: str = _get("CHAT_API_KEY", "ollama")   # Ollama ignores the value
+    chat_temperature: float = float(_get("CHAT_TEMPERATURE", "0.3"))
     chat_timeout: int = int(_get("CHAT_TIMEOUT", "60"))  # seconds per LLM call
     chat_row_cap: int = int(_get("CHAT_ROW_CAP", "200")) # max rows a query may read
     chat_history_coll: str = _get("FACE_CHAT_HISTORY_COLL", "chat_history")
