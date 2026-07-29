@@ -492,6 +492,49 @@ class Store:
                 "status": d.get("status"), "similarity": d.get("similarity"),
                 "ts": ts.isoformat() if isinstance(ts, datetime) else ts}
 
+    def set_attendance(self, sid, date, session, status, scope=None):
+        """Create or update the status of an attendance record for
+        (sid, date, session). Used for manual edits. Scope-checked.
+        Returns (public_record, error) — error in {None, 'unknown', 'forbidden'}."""
+        self.ensure_index()
+        rec = self.get(sid)
+        if not rec:
+            return None, "unknown"
+        if scope and not self.can_view_student(scope, rec["raw"]):
+            return None, "forbidden"
+        status = status if status in ("P", "L", "A") else "P"
+        date = date or self._today()
+        session = session or "Morning"
+        now = datetime.now(timezone.utc)
+        existing = self.attn.find_one({"StuID": sid, "date": date, "session": session})
+        if existing:
+            self.attn.update_one(
+                {"_id": existing["_id"]},
+                {"$set": {"status": status, "updatedAt": now,
+                          "editedBy": scope.get("loginId") if scope else None}})
+            existing["status"] = status
+            return self._attn_public(existing), None
+        # no record yet for this slot -> create one with the chosen status
+        s = rec["raw"]
+        sub_id, sub_na = self._subject_for_course(s.get("CurCrID"))
+        try:
+            date_at = datetime.strptime(date, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+        except (ValueError, TypeError):
+            date_at = now
+        doc = {
+            "InId": s.get("InId"), "PrID": s.get("CurPrID"), "CrID": s.get("CurCrID"),
+            "DeptID": s.get("CurDeptID"), "SemID": s.get("CurSemID"),
+            "SecID": s.get("CurSecID"), "AcYr": s.get("CurAcYr"),
+            "StuID": sid, "StuNa": rec["name"], "SubID": sub_id, "SubNa": sub_na,
+            "date": date, "dateAt": date_at, "session": session, "status": status,
+            "source": "manual", "markedBy": scope.get("loginId") if scope else None,
+            "editedBy": scope.get("loginId") if scope else None,
+            "similarity": None, "CrAt": now,
+        }
+        res = self.attn.insert_one(doc)
+        doc["_id"] = res.inserted_id
+        return self._attn_public(doc), None
+
     def list_attendance(self, date=None, cls=None, session=None, sid=None, limit=1000,
                          scope=None):
         q = dict(self._scope_attn_query(scope))   # InId + (StuID|CrID) scope
@@ -528,11 +571,20 @@ class Store:
         q = {"date": date, **self._scope_attn_query(scope)}
         if session:
             q["session"] = session
+        def _ts(r):
+            t = r.get("updatedAt") or r.get("CrAt")
+            try:
+                return t.timestamp()
+            except Exception:
+                return 0.0
+
         recs = {}
         for r in self.attn.find(q):
-            # prefer a present/late record if a student has multiple sessions
+            # When a student has multiple records for the day, show the most
+            # recently updated one so a manual edit is authoritative (rather than
+            # blindly preferring present over absent).
             prev = recs.get(r["StuID"])
-            if prev is None or (r.get("status") in ("P", "L") and prev.get("status") == "A"):
+            if prev is None or _ts(r) >= _ts(prev):
                 recs[r["StuID"]] = r
         out = []
         for s in self.students.find({"StFl": {"$ne": "I"}, **self._scope_student_query(scope)}):

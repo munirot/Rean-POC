@@ -26,9 +26,11 @@ export function useCamera() {
       stop()
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: face }, audio: false })
       streamRef.current = stream
+      // If the <video> is already mounted (e.g. on flip) attach now; otherwise
+      // the effect below attaches it once the element mounts (active -> render).
       if (videoRef.current) {
         videoRef.current.srcObject = stream
-        await videoRef.current.play()
+        videoRef.current.play().catch(() => {})
       }
       setFacing(face)
       setActive(true)
@@ -38,6 +40,17 @@ export function useCamera() {
       return false
     }
   }, [facing, secure, stop])
+
+  // Attach the stream once the video element actually exists. This covers the
+  // common case where the <video> is only rendered after `active` becomes true,
+  // so it isn't in the DOM yet when start() runs.
+  useEffect(() => {
+    const v = videoRef.current
+    if (active && v && streamRef.current && v.srcObject !== streamRef.current) {
+      v.srcObject = streamRef.current
+      v.play().catch(() => {})
+    }
+  }, [active])
 
   const flip = useCallback(() => start(facing === 'user' ? 'environment' : 'user'), [facing, start])
 

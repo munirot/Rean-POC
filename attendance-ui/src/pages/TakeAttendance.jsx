@@ -4,7 +4,7 @@ import PageHeader from '../components/PageHeader'
 import Button from '../components/Button'
 import FaceStage from '../components/FaceStage'
 import { api } from '../api'
-import { fmtTime } from '../utils/time'
+import { fmtTime, todayStr } from '../utils/time'
 import { useCamera } from '../hooks/useCamera'
 import { useToast } from '../components/Layout'
 import { getSession } from '../auth'
@@ -15,7 +15,7 @@ export default function TakeAttendance() {
   const mySid = session0?.sid
   const [source, setSource] = useState('face') // 'face' | 'manual'
   const [session, setSession] = useState('Morning')
-  const [threshold, setThreshold] = useState(0.35)
+  const [threshold, setThreshold] = useState(0.75)
   const [autoMark, setAutoMark] = useState(true)
   const [faces, setFaces] = useState([])
   const [dims, setDims] = useState({ w: 640, h: 480 })
@@ -30,11 +30,25 @@ export default function TakeAttendance() {
   const cam = useCamera()
   const busy = useRef(false)
   const loopRef = useRef(null)
+  const runningRef = useRef(false)   // live-detection loop flag (avoids stale cam.active)
   const markedSids = useRef(new Set())
   const sessionRef = useRef(session)
   const threshRef = useRef(threshold)
   const autoRef = useRef(autoMark)
-  useEffect(() => { sessionRef.current = session; markedSids.current = new Set(); setMarked([]) }, [session])
+  // Seed "already marked" from the server so the page reflects existing
+  // attendance (prior check-ins, face scans, or edits made in Records) instead
+  // of only what was marked in this page session.
+  useEffect(() => {
+    sessionRef.current = session
+    api.roster({ date: todayStr(), session }).then((r) => {
+      const present = (r.students || []).filter((x) => x.checkedIn)
+      markedSids.current = new Set(present.map((x) => x.sid))
+      setMarked(present.map((x) => ({
+        sid: x.sid, name: x.name, cls: x.cls, session,
+        status: x.status, time: x.time, when: x.time ? new Date(x.time) : new Date(),
+      })))
+    }).catch(() => { markedSids.current = new Set(); setMarked([]) })
+  }, [session])
   useEffect(() => { threshRef.current = threshold }, [threshold])
   useEffect(() => { autoRef.current = autoMark }, [autoMark])
 
@@ -71,9 +85,10 @@ export default function TakeAttendance() {
     return res
   }
   function startLive() {
+    runningRef.current = true
     let last = 0
     const step = async (t) => {
-      if (!cam.active) return
+      if (!runningRef.current) return   // ref, not stale cam.active
       if (t - last > 700 && !busy.current && cam.videoRef.current?.readyState >= 2) {
         last = t; busy.current = true
         try { const b = await cam.grabBlob(); if (b) await recognizeBlob(b) } catch {} finally { busy.current = false }
@@ -83,8 +98,8 @@ export default function TakeAttendance() {
     loopRef.current = requestAnimationFrame(step)
   }
   async function onStart() { const ok = await cam.start(); if (!ok) return setToast(cam.error); startLive() }
-  function onStop() { cancelAnimationFrame(loopRef.current); cam.stop(); setFaces([]) }
-  useEffect(() => () => cancelAnimationFrame(loopRef.current), [])
+  function onStop() { runningRef.current = false; cancelAnimationFrame(loopRef.current); cam.stop(); setFaces([]) }
+  useEffect(() => () => { runningRef.current = false; cancelAnimationFrame(loopRef.current) }, [])
 
   function switchSource(next) {
     if (next === source) return

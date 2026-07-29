@@ -35,7 +35,7 @@ from . import plan as planmod
 import base64
 from .schemas import (Health, Student, EnrollResult, RecognizeResult,
                       MarkRequest, MarkResult, AttendanceRecord, AttendanceSummary,
-                      Institute, LoginRequest, AuthUser, ChatRequest)
+                      Institute, LoginRequest, AuthUser, ChatRequest, AttendanceSet)
 
 WEB_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "web")
 
@@ -343,6 +343,20 @@ def list_attendance(date: Optional[str] = None, cls: Optional[str] = None,
                     session: Optional[str] = None, sid: Optional[str] = None,
                     user: dict = Depends(current_user)):
     return get_store().list_attendance(date=date, cls=cls, session=session, sid=sid, scope=user)
+
+
+@app.put("/api/attendance")
+def set_attendance(req: AttendanceSet, user: dict = Depends(current_user)):
+    """Create or edit a student's attendance status for a date/session.
+    Staff/admin only; limited to students the caller can see."""
+    require_staff(user)
+    record, err = get_store().set_attendance(
+        req.sid, req.date, req.session, req.status, scope=user)
+    if err == "unknown":
+        raise HTTPException(404, f"Unknown student {req.sid}")
+    if err == "forbidden":
+        raise HTTPException(403, "Not permitted to edit this student")
+    return {"ok": True, "record": record}
 
 
 @app.delete("/api/attendance/{record_id}")

@@ -1,11 +1,64 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Card, Table, Form, Row, Col, Badge } from 'react-bootstrap'
+import { Card, Table, Form, Row, Col, Badge, Modal } from 'react-bootstrap'
 import PageHeader from '../components/PageHeader'
 import Button from '../components/Button'
 import { api } from '../api'
 import { todayStr, fmtTime } from '../utils/time'
 import { useToast } from '../components/Layout'
 import { getSession } from '../auth'
+
+// Confirmation dialog for changing a student's attendance status.
+const STATUS_LABEL = { present: 'Present', late: 'Late', absent: 'Absent', none: 'Not marked' }
+const UI_TO_CODE = { present: 'P', late: 'L', absent: 'A' }
+
+function EditAttendanceModal({ row, date, defaultSession, onClose, onSaved, setToast }) {
+  const [status, setStatus] = useState('present')
+  const [busy, setBusy] = useState(false)
+  useEffect(() => {
+    if (row) setStatus(['present', 'late', 'absent'].includes(row.status) ? row.status : 'present')
+  }, [row])
+  if (!row) return null
+  const session = row.session || defaultSession || 'Morning'
+
+  async function confirm() {
+    setBusy(true)
+    try {
+      await api.setAttendance({ sid: row.sid, date, session, status: UI_TO_CODE[status] })
+      setToast('Attendance updated')
+      onSaved()
+    } catch (e) {
+      setToast('Update failed: ' + e.message)
+    } finally { setBusy(false) }
+  }
+
+  return (
+    <Modal show onHide={busy ? undefined : onClose} centered>
+      <Modal.Header closeButton><Modal.Title>Edit attendance</Modal.Title></Modal.Header>
+      <Modal.Body>
+        <div className="mb-3">
+          <div className="fw-semibold text-primary">{row.name}</div>
+          <div className="text-secondary fs-2">{row.sid} · {date} · {session}</div>
+          <div className="text-secondary fs-2 mt-1">Current: {STATUS_LABEL[row.status] || '—'}</div>
+        </div>
+        <Form.Label className="fs-2 text-secondary fw-semibold mb-1">New status</Form.Label>
+        <Form.Select value={status} onChange={(e) => setStatus(e.target.value)}>
+          <option value="present">Present</option>
+          <option value="late">Late</option>
+          <option value="absent">Absent</option>
+        </Form.Select>
+        <p className="text-secondary fs-2 mt-3 mb-0">
+          Change {row.name}'s status to <strong>{STATUS_LABEL[status]}</strong>? This updates the record.
+        </p>
+      </Modal.Body>
+      <Modal.Footer>
+        <Button variant="secondary" onClick={onClose} disabled={busy}>Cancel</Button>
+        <Button variant="primary" icon="check" onClick={confirm} disabled={busy}>
+          {busy ? 'Saving…' : 'Confirm change'}
+        </Button>
+      </Modal.Footer>
+    </Modal>
+  )
+}
 
 export default function Records() {
   const session0 = getSession()
@@ -21,6 +74,8 @@ function RosterRecords() {
   const [classes, setClasses] = useState([])
   const [only, setOnly] = useState('all')            // all | in | out
   const [q, setQ] = useState('')
+  const [editing, setEditing] = useState(null)       // row being edited (modal)
+  const [toast, setToast] = useToast()
 
   const load = () => api.roster({ date, cls, session }).then(setData).catch(() => setData(null))
   useEffect(() => { load() }, [date, cls, session])
@@ -99,7 +154,7 @@ function RosterRecords() {
 
           <Table responsive hover className="camu-table align-middle mb-0">
             <thead><tr>
-              <th>Student</th><th>ID</th><th>Class</th><th>Status</th><th>Time</th><th>Source</th>
+              <th>Student</th><th>ID</th><th>Class</th><th>Status</th><th>Time</th><th>Source</th><th></th>
             </tr></thead>
             <tbody>
               {rows.map((r) => (
@@ -110,13 +165,22 @@ function RosterRecords() {
                   <td className="fs-3 p-3">{statusBadge(r)}</td>
                   <td className="fs-3 p-3">{fmtTime(r.time) || '—'}</td>
                   <td className="fs-3 p-3">{r.source ? <Badge bg="light" text="dark">{r.source}</Badge> : '—'}</td>
+                  <td className="fs-3 p-3 text-end">
+                    <Button size="sm" variant="outline-primary" icon="edit"
+                      onClick={() => setEditing(r)}>Edit</Button>
+                  </td>
                 </tr>
               ))}
-              {data && !rows.length && <tr><td colSpan="6" className="text-center text-secondary p-4">No students match</td></tr>}
+              {data && !rows.length && <tr><td colSpan="7" className="text-center text-secondary p-4">No students match</td></tr>}
             </tbody>
           </Table>
         </Card.Body>
       </Card>
+
+      <EditAttendanceModal row={editing} date={date} defaultSession={session}
+        onClose={() => setEditing(null)}
+        onSaved={() => { setEditing(null); load() }} setToast={setToast} />
+      {toast}
     </>
   )
 }

@@ -138,6 +138,13 @@ class AttendanceSummary(BaseModel):
     sessions: List[str]
 
 
+class AttendanceSet(BaseModel):
+    sid: str
+    status: str                       # "P" | "L" | "A"
+    date: Optional[str] = None        # YYYY-MM-DD (defaults to today)
+    session: Optional[str] = None     # defaults to "Morning"
+
+
 class ChatRequest(BaseModel):
     message: str
     sid: Optional[str] = None             # student currently on screen, for context

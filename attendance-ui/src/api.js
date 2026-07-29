@@ -72,6 +72,9 @@ export const api = {
     return j('/api/attendance' + (q ? `?${q}` : ''))
   },
   deleteAttendance: (id) => j(`/api/attendance/${id}`, { method: 'DELETE' }),
+  setAttendance: (body) => j('/api/attendance', {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+  }),
   summary: (date) => j('/api/attendance/summary' + (date ? `?date=${date}` : '')),
   roster: (params = {}) => {
     const q = new URLSearchParams(
