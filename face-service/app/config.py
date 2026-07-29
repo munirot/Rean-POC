@@ -1,5 +1,6 @@
 """Runtime configuration, all overridable via environment variables (.env)."""
 import os
+from datetime import datetime, timedelta, timezone
 
 
 def _get(name: str, default: str) -> str:
@@ -72,6 +73,23 @@ class Settings:
         if source == "phone" and self.liveness_threshold_phone:
             return float(self.liveness_threshold_phone)
         return self.liveness_threshold
+
+    # Local timezone used for attendance day-bucketing and display. Cambodia is
+    # UTC+7 with no daylight saving, so a fixed offset is exact and dependency-free.
+    app_tz_offset_hours: float = float(_get("APP_TZ_OFFSET_HOURS", "7"))
+
+    @property
+    def tzinfo(self) -> timezone:
+        """Fixed-offset tzinfo for the configured local timezone (default +07:00)."""
+        return timezone(timedelta(hours=self.app_tz_offset_hours))
+
+    def now_local(self) -> datetime:
+        """Timezone-aware 'now' in local (Cambodia) time."""
+        return datetime.now(self.tzinfo)
+
+    def today_str(self) -> str:
+        """Local calendar day as YYYY-MM-DD — the correct attendance date bucket."""
+        return self.now_local().strftime("%Y-%m-%d")
 
     # API
     cors_origins: str = _get("CORS_ORIGINS", "*")

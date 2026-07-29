@@ -35,7 +35,11 @@ def _student_class(s):
 
 class Store:
     def __init__(self):
-        self.client = MongoClient(settings.mongo_uri, serverSelectionTimeoutMS=4000)
+        # tz_aware=True so datetimes read back from Mongo carry UTC tzinfo. Without
+        # it PyMongo returns naive datetimes and isoformat() drops the offset, so
+        # the browser reads a UTC time as if it were local.
+        self.client = MongoClient(settings.mongo_uri, serverSelectionTimeoutMS=4000,
+                                  tz_aware=True, tzinfo=timezone.utc)
         db = self.client[settings.db_name]
         self.students = db[settings.students_coll]
         self.emb = db[settings.embeddings_coll]
@@ -234,7 +238,7 @@ class Store:
         Students[] array of {StuID, status, marks}). Reduces to per-category and
         overall figures for one student. 'missing' = assigned, past due, not
         submitted/graded."""
-        today = today or datetime.now().strftime("%Y-%m-%d")
+        today = today or settings.today_str()
         by_cat = {}
         submitted = graded = missing = 0
         for a in assignment_docs:
@@ -429,7 +433,9 @@ class Store:
     # -- attendance (real schema) -------------------------------------------
     @staticmethod
     def _today():
-        return datetime.now().strftime("%Y-%m-%d")
+        # Local (Cambodia, UTC+7) calendar day, so late-evening marks don't roll
+        # into the next UTC day when the server runs in UTC.
+        return settings.today_str()
 
     def _subject_for_course(self, cr_id):
         s = self.subjects.find_one({"CrID": cr_id}, {"_id": 0, "SubID": 1, "SubNa": 1})
@@ -451,7 +457,8 @@ class Store:
         sub_id, sub_na = self._subject_for_course(s.get("CurCrID"))
         now = datetime.now(timezone.utc)
         try:
-            date_at = datetime.strptime(date, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+            # Anchor the day marker to local (Cambodia) midnight, not UTC midnight.
+            date_at = datetime.strptime(date, "%Y-%m-%d").replace(tzinfo=settings.tzinfo)
         except (ValueError, TypeError):
             date_at = now
         doc = {
