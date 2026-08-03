@@ -45,9 +45,20 @@ export const api = {
   clearChat: (conversationId) => j('/api/chat/history' +
     (conversationId ? `?conversationId=${encodeURIComponent(conversationId)}` : ''),
     { method: 'DELETE' }),
-  enroll: (sid, fileOrBlob, name = 'photo.jpg') => {
+  // Guided enrollment: analyze one frame's head pose + liveness for live feedback.
+  analyzePose: (blob) => {
     const fd = new FormData()
-    fd.append('file', fileOrBlob, name)
+    fd.append('file', blob, 'frame.jpg')
+    return j('/api/face/pose', { method: 'POST', body: fd })
+  },
+  // Multi-angle enrollment: submit the captured frames + their pose labels.
+  // `captures` = [{ blob, pose }] in order (e.g. center, left, right).
+  enroll: (sid, captures) => {
+    const fd = new FormData()
+    for (const c of captures) {
+      fd.append('files', c.blob, `${c.pose}.jpg`)
+      fd.append('poses', c.pose)
+    }
     return j(`/api/students/${sid}/enroll`, { method: 'POST', body: fd })
   },
   unenroll: (sid) => j(`/api/students/${sid}/enroll`, { method: 'DELETE' }),

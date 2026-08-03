@@ -25,24 +25,48 @@ class Student(BaseModel):
     thumb: Optional[str] = None
 
 
-class EnrollResult(BaseModel):
-    ok: bool
-    sid: str
-    name: str
-    quality: float
-    faces_found: int
-    embVer: str
-    thumb: Optional[str] = None
-    message: Optional[str] = None
-    live: Optional[bool] = None
-    liveness_score: Optional[float] = None
-
-
 class BBox(BaseModel):
     x: float
     y: float
     w: float
     h: float
+
+
+class PoseAnalysis(BaseModel):
+    """Per-frame feedback for the guided enrollment loop (POST /api/face/pose)."""
+    image_w: int
+    image_h: int
+    face_found: bool
+    faces: int = 0
+    bbox: Optional[BBox] = None
+    yaw: Optional[float] = None
+    pitch: Optional[float] = None
+    roll: Optional[float] = None
+    quality: Optional[float] = None
+    pose: Optional[str] = None          # 'center' | 'left' | 'right' | 'none'
+    live: Optional[bool] = None
+    liveness_score: Optional[float] = None
+    quality_ok: bool = False
+    message: Optional[str] = None
+
+
+class EnrollAngle(BaseModel):
+    pose: Optional[str] = None
+    yaw: float = 0.0
+    quality: Optional[float] = None
+    liveness_score: Optional[float] = None
+
+
+class EnrollMultiResult(BaseModel):
+    ok: bool
+    sid: str
+    name: str
+    embVer: str
+    angles: List[EnrollAngle] = []
+    yaw_span: float = 0.0
+    quality: float = 0.0                # best/frontal quality (roster)
+    thumb: Optional[str] = None
+    message: Optional[str] = None
 
 
 class FaceMatch(BaseModel):

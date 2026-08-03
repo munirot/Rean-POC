@@ -51,6 +51,12 @@ class Store:
         self.staffs = db[settings.staffs_coll]
         self.chat_hist = db[settings.chat_history_coll]
         self._indexed = False
+        # Cached gallery (embeddings joined to names). Rebuilt lazily and only when
+        # enrollment changes, so live recognition doesn't re-scan Mongo every frame.
+        self._gallery_cache = None
+        # Vectorized form of the same gallery (stacked matrix + aligned metadata).
+        self._gallery_mat = None
+        self._gallery_meta = None
 
     def ping(self):
         self.client.admin.command("ping")
@@ -168,7 +174,8 @@ class Store:
 
     # -- students ------------------------------------------------------------
     def _emb_map(self):
-        return {e["StuID"]: e for e in self.emb.find({}, {"emb": 0})}
+        # Exclude the heavy vectors — the roster only needs the metadata/thumb.
+        return {e["StuID"]: e for e in self.emb.find({}, {"emb": 0, "embs": 0})}
 
     def list_students(self, scope=None):
         embs = self._emb_map()
@@ -184,6 +191,7 @@ class Store:
                 "quality": e.get("quality") if e else None,
                 "embVer": e.get("embVer") if e else None,
                 "thumb": e.get("thumb") if e else None,
+                "angles": (e.get("nAngles") if e else None),
             })
         out.sort(key=lambda x: str(x["sid"]))
         return out
@@ -397,41 +405,112 @@ class Store:
         s = self.students.find_one({"$or": [{"StuID": sid}, {"CmStudID": sid}]}, {"_id": 0})
         if not s:
             return None
-        e = self.emb.find_one({"StuID": sid}, {"emb": 0}) or {}
+        e = self.emb.find_one({"StuID": sid}, {"emb": 0, "embs": 0}) or {}
         return {"sid": sid, "name": _full_name(s), "cls": _student_class(s),
                 "raw": s, "enrolled": bool(e),
-                "quality": e.get("quality"), "embVer": e.get("embVer"), "thumb": e.get("thumb")}
+                "quality": e.get("quality"), "embVer": e.get("embVer"),
+                "thumb": e.get("thumb"), "angles": e.get("nAngles")}
+
+    def _invalidate_gallery(self):
+        self._gallery_cache = None
+        self._gallery_mat = None
+        self._gallery_meta = None
+
+    def gallery_matrix(self):
+        """(matrix, meta) form of the gallery for vectorized matching.
+        matrix: float32 (N, D) of L2-normalized embeddings (one row per angle);
+        meta:   list of {sid, name, cls} aligned to matrix rows. Cached with the
+        gallery and invalidated together on any enrollment change."""
+        if self._gallery_mat is not None:
+            return self._gallery_mat, self._gallery_meta
+        g = self.gallery()
+        if g:
+            self._gallery_mat = np.stack([e["emb"] for e in g]).astype(np.float32)
+            self._gallery_meta = [{"sid": e["sid"], "name": e["name"], "cls": e.get("cls")} for e in g]
+        else:
+            self._gallery_mat = np.zeros((0, 512), dtype=np.float32)
+            self._gallery_meta = []
+        return self._gallery_mat, self._gallery_meta
 
     def gallery(self):
-        """Enrolled students with embeddings as numpy arrays, joined to names."""
+        """Enrolled students with embeddings as numpy arrays, joined to names.
+
+        Emits one gallery row per stored angle so a turned face still matches the
+        student. Reads both new multi-angle docs (embs[]) and legacy single-vector
+        docs (emb) — best_match takes the max similarity across all rows, so extra
+        angles only improve recall. Cached until enrollment changes so the live
+        recognition loop doesn't re-scan Mongo on every frame."""
+        if self._gallery_cache is not None:
+            return self._gallery_cache
         name_by_sid = {}
         for s in self.students.find({}, {"_id": 0}):
             name_by_sid[_student_sid(s)] = (_full_name(s), _student_class(s))
         g = []
         for e in self.emb.find({}):
             nm, cls = name_by_sid.get(e["StuID"], (e["StuID"], None))
-            g.append({"sid": e["StuID"], "name": nm, "cls": cls,
-                      "emb": np.asarray(e["emb"], dtype=np.float32)})
+            vecs = e.get("embs")
+            if vecs:
+                for v in vecs:
+                    g.append({"sid": e["StuID"], "name": nm, "cls": cls,
+                              "pose": v.get("pose"),
+                              "emb": np.asarray(v["emb"], dtype=np.float32)})
+            elif e.get("emb") is not None:        # legacy single-vector enrollment
+                g.append({"sid": e["StuID"], "name": nm, "cls": cls,
+                          "pose": None,
+                          "emb": np.asarray(e["emb"], dtype=np.float32)})
+        self._gallery_cache = g
         return g
 
     # -- enrollment (face_embeddings) ---------------------------------------
     def set_embedding(self, sid, emb, quality, thumb, emb_ver):
+        """Legacy single-vector enrollment (kept for back-compat / tests)."""
         self.ensure_index()
         now = datetime.now(timezone.utc)
         self.emb.update_one(
             {"StuID": sid},
             {"$set": {"emb": [float(x) for x in emb], "quality": quality,
-                      "thumb": thumb, "embVer": emb_ver, "updatedAt": now},
+                      "thumb": thumb, "embVer": emb_ver, "updatedAt": now,
+                      "embs": [{"emb": [float(x) for x in emb], "pose": "center",
+                                "quality": quality}], "nAngles": 1},
              "$setOnInsert": {"enrolledAt": now}},
             upsert=True,
         )
+        self._invalidate_gallery()
+
+    def set_embeddings(self, sid, captures, emb_ver):
+        """Multi-angle enrollment. `captures` is an ordered list of dicts:
+        {emb, pose, yaw, quality, liveness_score, thumb}. The frontal (or first)
+        capture's thumb/quality are surfaced at the top level for the roster.
+        Replaces any prior profile (single- or multi-angle)."""
+        self.ensure_index()
+        now = datetime.now(timezone.utc)
+        # Prefer the 'center' capture for the roster thumbnail; else the first.
+        face = next((c for c in captures if c.get("pose") == "center"), captures[0])
+        embs = [{"emb": [float(x) for x in c["emb"]], "pose": c.get("pose"),
+                 "yaw": round(float(c.get("yaw", 0.0)), 2),
+                 "quality": c.get("quality"),
+                 "liveness_score": c.get("liveness_score")} for c in captures]
+        self.emb.update_one(
+            {"StuID": sid},
+            {"$set": {"embs": embs, "nAngles": len(embs),
+                      "quality": face.get("quality"), "thumb": face.get("thumb"),
+                      "embVer": emb_ver, "updatedAt": now},
+             "$unset": {"emb": ""},          # drop any legacy single vector
+             "$setOnInsert": {"enrolledAt": now}},
+            upsert=True,
+        )
+        self._invalidate_gallery()
         return True
 
     def clear_embedding(self, sid):
-        return self.emb.delete_one({"StuID": sid}).deleted_count > 0
+        ok = self.emb.delete_one({"StuID": sid}).deleted_count > 0
+        if ok:
+            self._invalidate_gallery()
+        return ok
 
     def clear_all_embeddings(self):
         self.emb.delete_many({})
+        self._invalidate_gallery()
 
     # -- attendance (real schema) -------------------------------------------
     @staticmethod

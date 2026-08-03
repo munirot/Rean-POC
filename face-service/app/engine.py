@@ -57,6 +57,44 @@ class FaceEngine:
         return round(float(getattr(face, "det_score", 0.0)), 4)
 
     @staticmethod
+    def head_pose(face) -> dict:
+        """Approximate head pose in degrees: {yaw, pitch, roll, source}.
+
+        Yaw sign convention: positive = subject turned toward their own left.
+        Prefers InsightFace's 3D-landmark pose (buffalo_l ships the landmark_3d_68
+        model, which sets face.pose = [pitch, yaw, roll]); falls back to a robust
+        5-keypoint geometric estimate so lighter packs still work.
+        """
+        pose = getattr(face, "pose", None)
+        if pose is not None and len(pose) == 3:
+            return {"pitch": float(pose[0]), "yaw": float(pose[1]),
+                    "roll": float(pose[2]), "source": "model"}
+        return FaceEngine._pose_from_kps(face)
+
+    @staticmethod
+    def _pose_from_kps(face) -> dict:
+        """Geometric yaw/roll/pitch from the 5 detector keypoints (eyes, nose,
+        mouth corners). An approximation — good enough to gate a head turn."""
+        kps = getattr(face, "kps", None)
+        if kps is None or len(kps) < 3:
+            return {"pitch": 0.0, "yaw": 0.0, "roll": 0.0, "source": "none"}
+        le, re_, nose = kps[0], kps[1], kps[2]
+        eye_mid_x = (float(le[0]) + float(re_[0])) / 2.0
+        eye_mid_y = (float(le[1]) + float(re_[1])) / 2.0
+        interocular = float(np.hypot(re_[0] - le[0], re_[1] - le[1])) + 1e-6
+        # Nose horizontal offset from the eye midpoint, normalized by interocular
+        # distance, mapped to an approximate yaw angle (arctan for a soft, bounded
+        # response). ratio ~0 frontal; a strong turn approaches ~±40°.
+        ratio = (float(nose[0]) - eye_mid_x) / interocular
+        yaw = float(np.degrees(np.arctan(ratio / 0.5)))
+        roll = float(np.degrees(np.arctan2(float(re_[1]) - float(le[1]),
+                                           float(re_[0]) - float(le[0]))))
+        # Pitch proxy: nose sits ~0.6·interocular below the eye line when frontal;
+        # deviation from that suggests up/down tilt.
+        pitch = float(np.degrees(np.arctan((nose[1] - eye_mid_y) / interocular - 0.6)))
+        return {"pitch": pitch, "yaw": yaw, "roll": roll, "source": "kps"}
+
+    @staticmethod
     def thumbnail(img: np.ndarray, face, size: int = 112) -> str:
         """Base64 JPEG data-URL of the cropped face (for the roster UI)."""
         h, w = img.shape[:2]
