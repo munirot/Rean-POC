@@ -2,4 +2,4 @@ _archive
 graphify-out
 sample-data/seed_faces
 __pycache__/
-*.pyc
+*.pyc.DS_Store
