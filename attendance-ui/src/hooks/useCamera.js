@@ -16,6 +16,9 @@ export function useCamera() {
       streamRef.current.getTracks().forEach((t) => t.stop())
       streamRef.current = null
     }
+    // Release the last frame so nothing (e.g. an in-browser detector) keeps
+    // reading a frozen image after the camera is stopped.
+    if (videoRef.current) videoRef.current.srcObject = null
     setActive(false)
   }, [])
 
@@ -54,13 +57,18 @@ export function useCamera() {
 
   const flip = useCallback(() => start(facing === 'user' ? 'environment' : 'user'), [facing, start])
 
-  const grabBlob = useCallback(async () => {
+  // Grab a JPEG of the current frame. Pass `maxWidth` to downscale before encoding
+  // — smaller frames upload and decode faster, which is what keeps live recognition
+  // responsive. Omit it (enrollment) to keep full resolution/quality.
+  const grabBlob = useCallback(async (maxWidth) => {
     const v = videoRef.current
     if (!v || !v.videoWidth) return null
+    let w = v.videoWidth, h = v.videoHeight
+    if (maxWidth && w > maxWidth) { const s = maxWidth / w; w = Math.round(w * s); h = Math.round(h * s) }
     const c = document.createElement('canvas')
-    c.width = v.videoWidth; c.height = v.videoHeight
-    c.getContext('2d').drawImage(v, 0, 0, c.width, c.height)
-    return new Promise((res) => c.toBlob(res, 'image/jpeg', 0.92))
+    c.width = w; c.height = h
+    c.getContext('2d').drawImage(v, 0, 0, w, h)
+    return new Promise((res) => c.toBlob(res, 'image/jpeg', maxWidth ? 0.8 : 0.92))
   }, [])
 
   useEffect(() => stop, [stop])

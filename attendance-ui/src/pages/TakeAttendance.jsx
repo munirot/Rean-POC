@@ -6,6 +6,7 @@ import FaceStage from '../components/FaceStage'
 import { api } from '../api'
 import { fmtTime, todayStr } from '../utils/time'
 import { useCamera } from '../hooks/useCamera'
+import { useFaceDetection } from '../hooks/useFaceDetection'
 import { useToast } from '../components/Layout'
 import { getSession } from '../auth'
 
@@ -17,8 +18,6 @@ export default function TakeAttendance() {
   const [session, setSession] = useState('Morning')
   const [threshold, setThreshold] = useState(0.75)
   const [autoMark, setAutoMark] = useState(true)
-  const [faces, setFaces] = useState([])
-  const [dims, setDims] = useState({ w: 640, h: 480 })
   const [marked, setMarked] = useState([])
   const [toast, setToast] = useToast()
 
@@ -28,6 +27,8 @@ export default function TakeAttendance() {
   const [cls, setCls] = useState('')
 
   const cam = useCamera()
+  const det = useFaceDetection()            // in-browser real-time face boxes
+  const labelsRef = useRef([])              // backend identity, normalized, for the overlay
   const busy = useRef(false)
   const loopRef = useRef(null)
   const runningRef = useRef(false)   // live-detection loop flag (avoids stale cam.active)
@@ -75,7 +76,18 @@ export default function TakeAttendance() {
   }
   async function recognizeBlob(blob) {
     const res = await api.recognize(blob, threshRef.current)
-    setFaces(res.faces); setDims({ w: res.image_w, h: res.image_h })
+    // A request already in flight when the camera is stopped resolves ~1-2s later;
+    // dropping it here stops a stale box/label from flashing back after stop.
+    if (!runningRef.current) return res
+    // Store identity NORMALIZED so the overlay can attach it to the real-time
+    // (locally-detected) box regardless of the resolution we sent to the server.
+    const iw = res.image_w || 640, ih = res.image_h || 480
+    const now = performance.now()
+    labelsRef.current = res.faces.map((f) => ({
+      nx: f.bbox.x / iw, ny: f.bbox.y / ih, nw: f.bbox.w / iw, nh: f.bbox.h / ih,
+      ncx: (f.bbox.x + f.bbox.w / 2) / iw, ncy: (f.bbox.y + f.bbox.h / 2) / ih,
+      recognized: f.recognized, name: f.name, accuracy: f.accuracy, sid: f.sid, ts: now,
+    }))
     if (autoRef.current) for (const f of res.faces) {
       if (!f.recognized || !f.sid) continue
       // students self-check-in: only mark their own face
@@ -87,19 +99,28 @@ export default function TakeAttendance() {
   function startLive() {
     runningRef.current = true
     let last = 0
+    // The box tracks the face locally (in-browser), so recognition only needs to
+    // run often enough for fresh identity + prompt auto-marking, not for smoothness.
     const step = async (t) => {
       if (!runningRef.current) return   // ref, not stale cam.active
-      if (t - last > 700 && !busy.current && cam.videoRef.current?.readyState >= 2) {
+      if (t - last > 500 && !busy.current && cam.videoRef.current?.readyState >= 2) {
         last = t; busy.current = true
-        try { const b = await cam.grabBlob(); if (b) await recognizeBlob(b) } catch {} finally { busy.current = false }
+        try { const b = await cam.grabBlob(640); if (b) await recognizeBlob(b) } catch {} finally { busy.current = false }
       }
       loopRef.current = requestAnimationFrame(step)
     }
     loopRef.current = requestAnimationFrame(step)
   }
-  async function onStart() { const ok = await cam.start(); if (!ok) return setToast(cam.error); startLive() }
-  function onStop() { runningRef.current = false; cancelAnimationFrame(loopRef.current); cam.stop(); setFaces([]) }
-  useEffect(() => () => { runningRef.current = false; cancelAnimationFrame(loopRef.current) }, [])
+  async function onStart() {
+    const ok = await cam.start(); if (!ok) return setToast(cam.error)
+    det.start(cam.videoRef)          // begin real-time in-browser detection (loads on first use)
+    startLive()
+  }
+  function onStop() {
+    runningRef.current = false; cancelAnimationFrame(loopRef.current)
+    det.stop(); labelsRef.current = []; cam.stop()
+  }
+  useEffect(() => () => { runningRef.current = false; cancelAnimationFrame(loopRef.current); det.stop() }, [])   // eslint-disable-line react-hooks/exhaustive-deps
 
   function switchSource(next) {
     if (next === source) return
@@ -147,8 +168,17 @@ export default function TakeAttendance() {
 
               {source === 'face' ? <>
                 <FaceStage videoRef={cam.active ? cam.videoRef : null}
-                  faces={faces} srcW={dims.w} srcH={dims.h}
-                  placeholder="Start the camera to recognize students. Live camera only — photo upload is disabled here to prevent spoofing." />
+                  boxesRef={det.boxesRef} labelsRef={labelsRef}
+                  placeholder="Start the camera to recognize students and mark attendance automatically." />
+
+                {cam.active && (
+                  <div className="fs-2 text-secondary mt-2">
+                    {det.status === 'ready' ? '● Camera on — recognizing students'
+                      : det.status === 'loading' ? '○ Getting the camera ready…'
+                      : det.status === 'error' ? '● Camera on — recognizing students'
+                      : ''}
+                  </div>
+                )}
 
                 <div className="d-flex flex-wrap gap-2 mt-3">
                   {!cam.active

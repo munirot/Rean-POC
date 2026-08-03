@@ -19,7 +19,7 @@ requirement for live camera access.
 """
 import os
 import uuid
-from typing import Optional
+from typing import Optional, List
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Header, Depends
@@ -33,7 +33,8 @@ from . import antispoof as anti
 from . import chat as chatmod
 from . import plan as planmod
 import base64
-from .schemas import (Health, Student, EnrollResult, RecognizeResult,
+from .schemas import (Health, Student, RecognizeResult, PoseAnalysis,
+                      EnrollMultiResult,
                       MarkRequest, MarkResult, AttendanceRecord, AttendanceSummary,
                       Institute, LoginRequest, AuthUser, ChatRequest, AttendanceSet)
 
@@ -241,40 +242,114 @@ def reset(user: dict = Depends(current_user)):
     return {"ok": True, "enrolled": get_store().enrolled_count()}
 
 
-@app.post("/api/students/{sid}/enroll", response_model=EnrollResult)
-async def enroll(sid: str, file: UploadFile = File(...), user: dict = Depends(current_user)):
+@app.post("/api/face/pose", response_model=PoseAnalysis)
+async def analyze_pose(file: UploadFile = File(...), source: Optional[str] = Form(None),
+                       user: dict = Depends(current_user)):
+    """Analyze ONE frame for the guided-enrollment loop: the largest face's head
+    pose, detector quality, and liveness, plus which pose bucket it currently
+    satisfies ('center'|'left'|'right'|'none'). Stateless — the client polls this
+    to prompt the user ("turn left") and to decide when to keep a frame. No data
+    is stored here."""
+    engine = _engine_or_503()
+    img = engine.decode(await file.read())
+    h, w = img.shape[:2]
+    faces = engine.detect(img)
+    if not faces:
+        return PoseAnalysis(image_w=w, image_h=h, face_found=False, faces=0,
+                            message="No face detected.")
+    face = faces[0]  # largest
+    pose = engine.head_pose(face)
+    quality = engine.quality(face)
+    bucket = settings.pose_bucket(pose["yaw"])
+    live = _liveness(img, face, settings.enroll_liveness_threshold)
+    return PoseAnalysis(
+        image_w=w, image_h=h, face_found=True, faces=len(faces),
+        bbox=engine.bbox(face), yaw=round(pose["yaw"], 1),
+        pitch=round(pose["pitch"], 1), roll=round(pose["roll"], 1),
+        quality=quality, pose=bucket,
+        live=(live["live"] if live is not None else None),
+        liveness_score=(live["score"] if live is not None else None),
+        quality_ok=quality >= settings.enroll_min_quality,
+    )
+
+
+@app.post("/api/students/{sid}/enroll", response_model=EnrollMultiResult)
+async def enroll(sid: str,
+                 files: List[UploadFile] = File(...),
+                 poses: List[str] = Form(...),
+                 source: Optional[str] = Form(None),
+                 user: dict = Depends(current_user)):
+    """Guided multi-angle enrollment (replaces single-image upload).
+
+    The client submits the frames it captured across the pose sequence
+    (center / left / right) together with each frame's intended pose label. Every
+    frame is RE-VALIDATED server-side — the client is never trusted: a face must be
+    present, pass the strict enrollment liveness cutoff, meet a minimum quality,
+    and its measured yaw must actually match the claimed pose. The accepted set
+    must also span a real yaw range (genuine head rotation) — a flat photo or
+    screen replay cannot produce correctly-shaped left AND right profiles. Each
+    angle is stored as its own embedding for robust recognition."""
     require_staff(user)
     store = get_store()
     student = store.get(sid)
     if not student:
         raise HTTPException(404, f"Unknown student {sid}")
-
+    if len(files) != len(poses):
+        raise HTTPException(400, "Mismatched files and poses.")
+    if not files:
+        raise HTTPException(400, "No frames submitted.")
     engine = _engine_or_503()
-    img = engine.decode(await file.read())
-    faces = engine.detect(img)
-    if not faces:
-        return EnrollResult(ok=False, sid=sid, name=student["name"], quality=0.0,
-                            faces_found=0, embVer=settings.model_pack,
-                            message="No face detected — use a clear, front-facing photo.")
-    face = faces[0]  # largest
-    # Reject spoofed templates: enrollment uses a stricter liveness cutoff since a
-    # template is stored once and quality matters most.
-    live = _liveness(img, face, settings.enroll_liveness_threshold)
-    if live is not None and not live["live"]:
-        return EnrollResult(ok=False, sid=sid, name=student["name"], quality=0.0,
-                            faces_found=len(faces), embVer=settings.model_pack,
-                            live=False, liveness_score=live["score"],
-                            message="Liveness check failed — enroll from a live face, "
-                                    "not a photo or screen.")
-    emb = engine.embedding(face)
-    thumb = engine.thumbnail(img, face)
-    quality = engine.quality(face)
-    store.set_embedding(sid, emb, quality, thumb, settings.model_pack)
-    return EnrollResult(ok=True, sid=sid, name=student["name"], quality=quality,
-                        faces_found=len(faces), embVer=settings.model_pack, thumb=thumb,
-                        live=(live["live"] if live is not None else None),
-                        liveness_score=(live["score"] if live is not None else None),
-                        message=f"Enrolled from largest of {len(faces)} face(s).")
+
+    def fail(msg: str, yaw_span: float = 0.0) -> EnrollMultiResult:
+        return EnrollMultiResult(ok=False, sid=sid, name=student["name"],
+                                 embVer=settings.model_pack, yaw_span=round(yaw_span, 1),
+                                 message=msg)
+
+    captures, yaws = [], []
+    for up, want in zip(files, poses):
+        want = (want or "").strip().lower()
+        img = engine.decode(await up.read())
+        faces = engine.detect(img)
+        if not faces:
+            return fail(f"No face detected in the '{want}' capture — retake it.")
+        face = faces[0]  # largest
+        quality = engine.quality(face)
+        if quality < settings.enroll_min_quality:
+            return fail(f"'{want}' capture too low quality ({quality}); move closer "
+                        "and improve lighting.")
+        live = _liveness(img, face, settings.enroll_liveness_threshold)
+        if live is not None and not live["live"]:
+            return fail("Liveness check failed — enroll from a live face, not a "
+                        "photo or screen.")
+        pose = engine.head_pose(face)
+        bucket = settings.pose_bucket(pose["yaw"])
+        if settings.enroll_multi_angle and want in ("center", "left", "right") \
+                and bucket != want:
+            return fail(f"'{want}' capture didn't match the pose (looked "
+                        f"'{bucket}'). Retake it.")
+        captures.append({
+            "emb": engine.embedding(face), "pose": want or bucket,
+            "yaw": pose["yaw"], "quality": quality,
+            "thumb": engine.thumbnail(img, face),
+            "liveness_score": (live["score"] if live is not None else None),
+        })
+        yaws.append(pose["yaw"])
+
+    yaw_span = (max(yaws) - min(yaws)) if yaws else 0.0
+    if settings.enroll_multi_angle and yaw_span < settings.enroll_yaw_span_min:
+        return fail(f"Not enough head rotation (span {yaw_span:.0f}° < "
+                    f"{settings.enroll_yaw_span_min:.0f}°). Turn your head further "
+                    "left and right.", yaw_span)
+
+    store.set_embeddings(sid, captures, settings.model_pack)
+    face = next((c for c in captures if c.get("pose") == "center"), captures[0])
+    return EnrollMultiResult(
+        ok=True, sid=sid, name=student["name"], embVer=settings.model_pack,
+        angles=[{"pose": c["pose"], "yaw": round(c["yaw"], 1),
+                 "quality": c["quality"], "liveness_score": c["liveness_score"]}
+                for c in captures],
+        yaw_span=round(yaw_span, 1), quality=face["quality"], thumb=face["thumb"],
+        message=f"Enrolled {len(captures)} angle(s) · yaw span {yaw_span:.0f}°.")
 
 
 @app.delete("/api/students/{sid}/enroll")
@@ -296,13 +371,13 @@ async def recognize(file: UploadFile = File(...), threshold: Optional[float] = F
     thr = settings.match_threshold if threshold is None else float(threshold)
     live_thr = settings.liveness_threshold_for(source)
 
-    gallery = store.gallery()
+    mat, meta = store.gallery_matrix()
     faces_out = []
     for face in engine.detect(img):
         # Liveness first — a matched identity is only trusted if the face is live.
         live = _liveness(img, face, live_thr)
         emb = engine.embedding(face)
-        m = eng.best_match(emb, gallery, thr)
+        m = eng.best_match_vec(emb, mat, meta, thr)
         id_ok = m.get("recognized", False)
         # Combined gate: accept only when identity matches AND liveness passes.
         recognized = id_ok and (live["live"] if live is not None else True)

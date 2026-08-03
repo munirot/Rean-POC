@@ -128,7 +128,8 @@ def cosine(a: np.ndarray, b: np.ndarray) -> float:
 
 def best_match(emb: np.ndarray, gallery, threshold: float):
     """gallery: list of dicts {sid, name, cls, emb(np.ndarray)}.
-    Returns match info for the single best candidate."""
+    Returns match info for the single best candidate. Kept for back-compat/tests;
+    the recognition path uses the vectorized best_match_vec below."""
     if not gallery:
         return {"recognized": False, "reason": "no_enrolled_students",
                 "similarity": 0.0, "accuracy": 0.0}
@@ -142,3 +143,26 @@ def best_match(emb: np.ndarray, gallery, threshold: float):
     best["accuracy"] = round(max(0.0, min(1.0, best["similarity"])) * 100.0, 1)
     best["similarity"] = round(best["similarity"], 4)
     return best
+
+
+def best_match_vec(emb: np.ndarray, mat: np.ndarray, meta, threshold: float):
+    """Vectorized version of best_match.
+
+    mat:  (N, D) float32 of L2-normalized gallery embeddings (one row per angle).
+    meta: list of {sid, name, cls} aligned to mat's rows.
+    Because both sides are L2-normalized, `mat @ emb` gives cosine similarity for
+    every enrolled angle in a single BLAS call — O(1) Python, scales to large
+    rosters far better than a per-row loop."""
+    if mat is None or mat.shape[0] == 0:
+        return {"recognized": False, "reason": "no_enrolled_students",
+                "similarity": 0.0, "accuracy": 0.0}
+    sims = mat @ emb                       # (N,) cosine similarities
+    i = int(np.argmax(sims))
+    sim = float(sims[i])
+    m = meta[i]
+    return {
+        "sid": m["sid"], "name": m["name"], "cls": m.get("cls"),
+        "recognized": sim >= threshold,
+        "accuracy": round(max(0.0, min(1.0, sim)) * 100.0, 1),
+        "similarity": round(sim, 4),
+    }

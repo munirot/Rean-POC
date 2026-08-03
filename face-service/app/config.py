@@ -47,7 +47,11 @@ class Settings:
     # buffalo_l = accurate (ArcFace r100, 512-d) · buffalo_s = light/fast
     model_pack: str = _get("MODEL_PACK", "buffalo_l")
     det_size: int = int(_get("DET_SIZE", "640"))
-    device: str = _get("DEVICE", "cpu").lower()          # "cpu" | "gpu"
+    # "cpu" · "gpu"/"cuda" (NVIDIA, Linux) · "coreml"/"mps" (Apple Silicon).
+    # On a Mac, "gpu" (CUDA) does nothing — use "coreml" to offload onto the Apple
+    # Neural Engine / GPU via onnxruntime's CoreML EP (falls back to CPU if that EP
+    # isn't in your onnxruntime build). See docs/gpu-acceleration.md.
+    device: str = _get("DEVICE", "cpu").lower()
 
     # Matching (cosine similarity on L2-normalized embeddings, range 0..1)
     match_threshold: float = float(_get("MATCH_THRESHOLD", "0.35"))
@@ -69,6 +73,44 @@ class Settings:
     # Fail-closed: if the anti-spoof model errors at runtime, treat as NOT live
     # (refuse, fall back to manual). Set "false" to fail-open (availability first).
     antispoof_fail_closed: bool = _get("ANTISPOOF_FAIL_CLOSED", "true").lower() == "true"
+
+    # --- Guided enrollment (motion-based liveness + multi-angle embeddings) --
+    # Enrollment no longer accepts a single uploaded photo. The student is walked
+    # through a short sequence of head poses in front of the live camera. Requiring
+    # genuine left/right head rotation (with geometrically-correct facial parallax)
+    # PLUS the passive anti-spoof score on every frame is our motion/pseudo-3D
+    # liveness gate — a flat photo or screen replay cannot present distinct,
+    # correctly-shaped left and right profiles. This is not depth-sensor 3D.
+    enroll_multi_angle: bool = _get("ENROLL_MULTI_ANGLE", "true").lower() == "true"
+    # Ordered pose steps the client guides the user through (first should be frontal
+    # so the stored thumbnail is a clean front-facing crop).
+    enroll_poses: str = _get("ENROLL_POSES", "center,left,right")
+    # Yaw tolerances (degrees). |yaw| <= center_max counts as frontal; a turn must
+    # reach turn_min in the requested direction to be accepted for that step.
+    enroll_yaw_center_max: float = float(_get("ENROLL_YAW_CENTER_MAX", "12"))
+    enroll_yaw_turn_min: float = float(_get("ENROLL_YAW_TURN_MIN", "18"))
+    # The accepted captures must span at least this much yaw (max - min) to prove
+    # real rotation happened — the cross-frame liveness signal.
+    enroll_yaw_span_min: float = float(_get("ENROLL_YAW_SPAN_MIN", "30"))
+    # Minimum detector quality (det_score) for a capture to count.
+    enroll_min_quality: float = float(_get("ENROLL_MIN_QUALITY", "0.5"))
+    # Sign escape hatch: if "turn left"/"turn right" come out reversed on your
+    # camera/model, set true to flip the yaw sign convention (no code change).
+    enroll_yaw_invert: bool = _get("ENROLL_YAW_INVERT", "false").lower() == "true"
+
+    def enroll_pose_list(self) -> list[str]:
+        return [p.strip().lower() for p in self.enroll_poses.split(",") if p.strip()]
+
+    def pose_bucket(self, yaw: float) -> str:
+        """Classify a measured yaw (degrees) into 'center' | 'left' | 'right' | 'none'."""
+        y = -yaw if self.enroll_yaw_invert else yaw
+        if abs(y) <= self.enroll_yaw_center_max:
+            return "center"
+        if y >= self.enroll_yaw_turn_min:
+            return "left"
+        if y <= -self.enroll_yaw_turn_min:
+            return "right"
+        return "none"   # between center and a full turn — "turn a bit more"
 
     def liveness_threshold_for(self, source: str | None) -> float:
         """Resolve the liveness cutoff for a capture source ('kiosk' | 'phone')."""
@@ -102,13 +144,19 @@ class Settings:
 
     @property
     def providers(self):
-        if self.device == "gpu":
+        # CPU is always kept last as a safe fallback: if the accelerated EP isn't
+        # available in the installed onnxruntime, ORT silently uses CPU.
+        if self.device in ("gpu", "cuda"):
             return ["CUDAExecutionProvider", "CPUExecutionProvider"]
+        if self.device in ("coreml", "mps", "ane"):
+            return ["CoreMLExecutionProvider", "CPUExecutionProvider"]
         return ["CPUExecutionProvider"]
 
     @property
     def ctx_id(self) -> int:
-        return 0 if self.device == "gpu" else -1
+        # InsightFace forces CPU-only when ctx_id < 0, so any accelerated device
+        # needs ctx_id >= 0 for the providers above to be honored.
+        return -1 if self.device in ("cpu", "") else 0
 
 
 settings = Settings()
