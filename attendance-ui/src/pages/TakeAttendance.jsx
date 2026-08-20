@@ -18,6 +18,14 @@ import { getSession } from '../auth'
 const CONFIRM_MIN_HITS = 2
 const CONFIRM_WINDOW_MS = 2500
 
+// Live recognition cadence + crop. We only send a frame when the in-browser
+// detector sees a face, and we send just the padded region around the face(s)
+// rather than the whole frame — idle scenes cost the server nothing, and an
+// occupied scene uploads/decodes far less. Padding keeps enough context around
+// the face for the server's detector, alignment, and liveness cues.
+const RECOGNIZE_INTERVAL_MS = 350
+const CROP_MARGIN = 0.4
+
 export default function TakeAttendance() {
   const session0 = getSession()
   const isStudent = session0?.type === 'student'
@@ -98,21 +106,29 @@ export default function TakeAttendance() {
       if (r.record) setMarked((m) => (m.some((x) => x.sid === sid) ? m : [{ ...r.record, when: new Date() }, ...m]))
     } catch (e) { markedSids.current.delete(sid); setToast(e.message) }
   }
-  async function recognizeBlob(blob) {
+  async function recognizeBlob(blob, region) {
     // Omit the threshold unless it was overridden, so MATCH_THRESHOLD applies.
     const res = await api.recognize(blob, threshTouched.current ? threshRef.current : null)
     // A request already in flight when the camera is stopped resolves ~1-2s later;
     // dropping it here stops a stale box/label from flashing back after stop.
     if (!runningRef.current) return res
-    // Store identity NORMALIZED so the overlay can attach it to the real-time
-    // (locally-detected) box regardless of the resolution we sent to the server.
-    const iw = res.image_w || 640, ih = res.image_h || 480
+    // The server's bbox is in the coordinates of the CROP we sent. Map it back into
+    // full-frame normalized coords so the overlay can attach the identity to the
+    // real-time local box by centre. For a full-frame send (region covers the whole
+    // video) this reduces to a plain normalize, i.e. the previous behaviour.
+    const iw = res.image_w || region.w, ih = res.image_h || region.h
+    const sx = region.w / iw, sy = region.h / ih          // sent-crop px -> video px
+    const vw = region.videoW, vh = region.videoH
     const now = performance.now()
-    labelsRef.current = res.faces.map((f) => ({
-      nx: f.bbox.x / iw, ny: f.bbox.y / ih, nw: f.bbox.w / iw, nh: f.bbox.h / ih,
-      ncx: (f.bbox.x + f.bbox.w / 2) / iw, ncy: (f.bbox.y + f.bbox.h / 2) / ih,
-      recognized: f.recognized, name: f.name, accuracy: f.accuracy, sid: f.sid, ts: now,
-    }))
+    labelsRef.current = res.faces.map((f) => {
+      const fx = region.x + f.bbox.x * sx, fy = region.y + f.bbox.y * sy
+      const fw = f.bbox.w * sx, fh = f.bbox.h * sy
+      return {
+        nx: fx / vw, ny: fy / vh, nw: fw / vw, nh: fh / vh,
+        ncx: (fx + fw / 2) / vw, ncy: (fy + fh / 2) / vh,
+        recognized: f.recognized, name: f.name, accuracy: f.accuracy, sid: f.sid, ts: now,
+      }
+    })
     if (autoRef.current) {
       const votes = votesRef.current
       for (const f of res.faces) {
@@ -135,6 +151,29 @@ export default function TakeAttendance() {
     }
     return res
   }
+  // The region to recognize this cycle, in video pixels. Returns null to SKIP the
+  // call entirely (no face in view). Uses the in-browser detector's boxes to crop
+  // to just the face(s); if that detector is unavailable (CDN blocked / erroring)
+  // we fall back to the full frame so recognition still works.
+  function recognitionRegion(v) {
+    const vw = v.videoWidth, vh = v.videoHeight
+    const boxes = det.boxesRef.current || []
+    if (!boxes.length) {
+      return det.status === 'error'
+        ? { x: 0, y: 0, w: vw, h: vh, videoW: vw, videoH: vh, full: true }
+        : null   // idle, no face — send nothing
+    }
+    let x1 = Infinity, y1 = Infinity, x2 = -Infinity, y2 = -Infinity
+    for (const b of boxes) {
+      x1 = Math.min(x1, b.x); y1 = Math.min(y1, b.y)
+      x2 = Math.max(x2, b.x + b.w); y2 = Math.max(y2, b.y + b.h)
+    }
+    const padX = (x2 - x1) * CROP_MARGIN, padY = (y2 - y1) * CROP_MARGIN
+    x1 = Math.max(0, x1 - padX); y1 = Math.max(0, y1 - padY)
+    x2 = Math.min(vw, x2 + padX); y2 = Math.min(vh, y2 + padY)
+    return { x: x1, y: y1, w: x2 - x1, h: y2 - y1, videoW: vw, videoH: vh, full: false }
+  }
+
   function startLive() {
     runningRef.current = true
     votesRef.current.clear()
@@ -143,9 +182,20 @@ export default function TakeAttendance() {
     // run often enough for fresh identity + prompt auto-marking, not for smoothness.
     const step = async (t) => {
       if (!runningRef.current) return   // ref, not stale cam.active
-      if (t - last > 500 && !busy.current && cam.videoRef.current?.readyState >= 2) {
-        last = t; busy.current = true
-        try { const b = await cam.grabBlob(640); if (b) await recognizeBlob(b) } catch {} finally { busy.current = false }
+      const v = cam.videoRef.current
+      if (t - last > RECOGNIZE_INTERVAL_MS && !busy.current && v?.readyState >= 2 && v.videoWidth) {
+        last = t
+        const region = recognitionRegion(v)
+        if (region === null) {
+          // No one in view — drop stale labels so a name doesn't linger over empty video.
+          if (labelsRef.current.length) labelsRef.current = []
+        } else {
+          busy.current = true
+          try {
+            const b = await cam.grabRegion(region, region.full ? 640 : 480)
+            if (b) await recognizeBlob(b, region)
+          } catch {} finally { busy.current = false }
+        }
       }
       loopRef.current = requestAnimationFrame(step)
     }

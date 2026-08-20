@@ -71,7 +71,26 @@ export function useCamera() {
     return new Promise((res) => c.toBlob(res, 'image/jpeg', maxWidth ? 0.8 : 0.92))
   }, [])
 
+  // Grab a JPEG of just a sub-rect of the frame (video-pixel coords), downscaled so
+  // its width <= maxWidth. Live recognition sends the region around the detected
+  // face(s) instead of the whole frame — smaller to encode/upload/decode, and it
+  // trims empty background the model would otherwise scan.
+  const grabRegion = useCallback(async (rect, maxWidth) => {
+    const v = videoRef.current
+    if (!v || !v.videoWidth) return null
+    const sx = Math.max(0, Math.round(rect.x)), sy = Math.max(0, Math.round(rect.y))
+    const sw = Math.min(v.videoWidth - sx, Math.round(rect.w))
+    const sh = Math.min(v.videoHeight - sy, Math.round(rect.h))
+    if (sw <= 0 || sh <= 0) return null
+    let dw = sw, dh = sh
+    if (maxWidth && dw > maxWidth) { const s = maxWidth / dw; dw = Math.round(dw * s); dh = Math.round(dh * s) }
+    const c = document.createElement('canvas')
+    c.width = dw; c.height = dh
+    c.getContext('2d').drawImage(v, sx, sy, sw, sh, 0, 0, dw, dh)
+    return new Promise((res) => c.toBlob(res, 'image/jpeg', 0.8))
+  }, [])
+
   useEffect(() => stop, [stop])
 
-  return { videoRef, active, facing, error, secure, start, stop, flip, grabBlob }
+  return { videoRef, active, facing, error, secure, start, stop, flip, grabBlob, grabRegion }
 }
