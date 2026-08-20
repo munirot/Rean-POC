@@ -30,6 +30,7 @@ logging.basicConfig(
     format="%(asctime)s %(levelname)s %(name)s %(message)s")
 
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Header, Depends
+from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
@@ -274,8 +275,16 @@ async def analyze_pose(file: UploadFile = File(...), source: Optional[str] = For
     satisfies ('center'|'left'|'right'|'none'). Stateless — the client polls this
     to prompt the user ("turn left") and to decide when to keep a frame. No data
     is stored here."""
+    # Detection/liveness are CPU-bound and would block the event loop if run here
+    # in the async handler, stalling every other request. Read the bytes on the
+    # loop, then run the heavy work in a worker thread. Same for enroll/recognize.
+    data = await file.read()
+    return await run_in_threadpool(_pose_sync, data)
+
+
+def _pose_sync(data: bytes) -> PoseAnalysis:
     engine = _engine_or_503()
-    img = engine.decode(await file.read())
+    img = engine.decode(data)
     h, w = img.shape[:2]
     faces = engine.detect(img)
     if not faces:
@@ -322,6 +331,12 @@ async def enroll(sid: str,
         raise HTTPException(400, "Mismatched files and poses.")
     if not files:
         raise HTTPException(400, "No frames submitted.")
+    blobs = [await up.read() for up in files]
+    return await run_in_threadpool(_enroll_sync, sid, student, blobs, list(poses))
+
+
+def _enroll_sync(sid, student, blobs, poses) -> EnrollMultiResult:
+    store = get_store()
     engine = _engine_or_503()
 
     def fail(msg: str, yaw_span: float = 0.0) -> EnrollMultiResult:
@@ -330,9 +345,9 @@ async def enroll(sid: str,
                                  message=msg)
 
     captures, yaws = [], []
-    for up, want in zip(files, poses):
+    for data, want in zip(blobs, poses):
         want = (want or "").strip().lower()
-        img = engine.decode(await up.read())
+        img = engine.decode(data)
         faces = engine.detect(img)
         if not faces:
             return fail(f"No face detected in the '{want}' capture — retake it.")
@@ -388,14 +403,22 @@ def unenroll(sid: str, user: dict = Depends(current_user)):
 async def recognize(file: UploadFile = File(...), threshold: Optional[float] = Form(None),
                     source: Optional[str] = Form(None), user: dict = Depends(current_user)):
     # Any authenticated user (staff kiosk or student self-service) may recognize.
+    data = await file.read()
+    return await run_in_threadpool(_recognize_sync, data, threshold, source, user)
+
+
+def _recognize_sync(data: bytes, threshold, source, user) -> RecognizeResult:
     store = get_store()
     engine = _engine_or_503()
-    img = engine.decode(await file.read())
+    img = engine.decode(data)
     h, w = img.shape[:2]
     thr = settings.match_threshold if threshold is None else float(threshold)
     live_thr = settings.liveness_threshold_for(source)
 
-    mat, meta = store.gallery_matrix()
+    # Scope the gallery to the caller: a kiosk only matches its own institute
+    # (and a course-limited staff scope, only their courses). Prevents matching —
+    # and auto-marking — a student who belongs to another institute or class.
+    mat, meta = store.gallery_matrix(scope=user)
     faces_out = []
     for face in engine.detect(img):
         # Liveness first — a matched identity is only trusted if the face is live.

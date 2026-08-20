@@ -493,22 +493,45 @@ class Store:
         if stamp != self._gallery_stamp:
             self._invalidate_gallery()
 
-    def gallery_matrix(self):
+    def gallery_matrix(self, scope=None):
         """(matrix, meta) form of the gallery for vectorized matching.
         matrix: float32 (N, D) of L2-normalized embeddings (one row per angle);
-        meta:   list of {sid, name, cls} aligned to matrix rows. Cached with the
-        gallery and invalidated together on any enrollment change."""
+        meta:   list of {sid, name, cls, InId, crid} aligned to matrix rows. Cached
+        with the gallery and invalidated together on any enrollment change.
+
+        When `scope` is given, only rows the caller may recognize are returned:
+        same institute, and — for a course-limited staff scope — only their
+        courses. This keeps a kiosk from ever matching a student in another
+        institute/class; recognition must not see wider than the caller's data."""
         self._ensure_fresh_gallery()
-        if self._gallery_mat is not None:
+        if self._gallery_mat is None:
+            g = self.gallery()
+            if g:
+                self._gallery_mat = np.stack([e["emb"] for e in g]).astype(np.float32)
+                self._gallery_meta = [{"sid": e["sid"], "name": e["name"],
+                                       "cls": e.get("cls"), "InId": e.get("InId"),
+                                       "crid": e.get("crid")} for e in g]
+            else:
+                self._gallery_mat = np.zeros((0, 512), dtype=np.float32)
+                self._gallery_meta = []
+        if scope is None:
             return self._gallery_mat, self._gallery_meta
-        g = self.gallery()
-        if g:
-            self._gallery_mat = np.stack([e["emb"] for e in g]).astype(np.float32)
-            self._gallery_meta = [{"sid": e["sid"], "name": e["name"], "cls": e.get("cls")} for e in g]
-        else:
-            self._gallery_mat = np.zeros((0, 512), dtype=np.float32)
-            self._gallery_meta = []
-        return self._gallery_mat, self._gallery_meta
+        return self._scoped_gallery(scope)
+
+    def _scoped_gallery(self, scope):
+        """Mask the cached gallery to the rows a scope may recognize. O(N) over the
+        gallery — negligible next to detection, and it avoids a per-scope cache."""
+        inid = scope.get("InId")
+        courses = scope.get("courses")
+        idx = [i for i, m in enumerate(self._gallery_meta)
+               if m.get("InId") == inid
+               and (courses is None or m.get("crid") in courses)]
+        if len(idx) == len(self._gallery_meta):
+            return self._gallery_mat, self._gallery_meta          # nothing filtered
+        if not idx:
+            dim = self._gallery_mat.shape[1] if self._gallery_mat.ndim == 2 else 512
+            return np.zeros((0, dim), dtype=np.float32), []
+        return self._gallery_mat[idx], [self._gallery_meta[i] for i in idx]
 
     def gallery(self):
         """Enrolled students with embeddings as numpy arrays, joined to names.
@@ -530,21 +553,24 @@ class Store:
         except Exception:
             self._gallery_stamp = None
         self._stamp_checked_at = time.monotonic()
-        name_by_sid = {}
+        # Carry InId + course id so the gallery can be masked to a caller's scope
+        # at recognition time (see gallery_matrix(scope)).
+        meta_by_sid = {}
         for s in self.students.find({}, {"_id": 0}):
-            name_by_sid[_student_sid(s)] = (_full_name(s), _student_class(s))
+            meta_by_sid[_student_sid(s)] = (_full_name(s), _student_class(s),
+                                            s.get("InId"), s.get("CurCrID"))
         g = []
         for e in self.emb.find({}):
-            nm, cls = name_by_sid.get(e["StuID"], (e["StuID"], None))
+            nm, cls, inid, crid = meta_by_sid.get(e["StuID"], (e["StuID"], None, None, None))
             vecs = e.get("embs")
             if vecs:
                 for v in vecs:
                     g.append({"sid": e["StuID"], "name": nm, "cls": cls,
-                              "pose": v.get("pose"),
+                              "InId": inid, "crid": crid, "pose": v.get("pose"),
                               "emb": np.asarray(v["emb"], dtype=np.float32)})
             elif e.get("emb") is not None:        # legacy single-vector enrollment
                 g.append({"sid": e["StuID"], "name": nm, "cls": cls,
-                          "pose": None,
+                          "InId": inid, "crid": crid, "pose": None,
                           "emb": np.asarray(e["emb"], dtype=np.float32)})
         self._gallery_cache = g
         return g
