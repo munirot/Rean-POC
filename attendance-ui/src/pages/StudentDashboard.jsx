@@ -1,10 +1,17 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Row, Col, Card, Badge, Table } from 'react-bootstrap'
+import { Row, Col, Card, Badge, Table, Modal } from 'react-bootstrap'
 import PageHeader from '../components/PageHeader'
 import Button from '../components/Button'
 import { api } from '../api'
 import { getSession } from '../auth'
+
+// How a raised dispute reads back to the student on the row it challenges.
+function DisputeBadge({ state }) {
+  if (state === 'approved') return <Badge bg="success">Corrected</Badge>
+  if (state === 'rejected') return <Badge bg="secondary">Not changed</Badge>
+  return <Badge bg="info" text="dark">Disputed · in review</Badge>
+}
 
 function Row2({ k, v }) {
   return (
@@ -30,8 +37,15 @@ export default function StudentDashboard() {
   const [stats, setStats] = useState(null)
   const [recent, setRecent] = useState([])
   const [plan, setPlan] = useState(null)
+  const [disputes, setDisputes] = useState([])   // my disputes (for row status)
+  const [disputing, setDisputing] = useState(null) // the row a modal is open for
+  const [reason, setReason] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [toast, setToast] = useState('')
   const [err, setErr] = useState('')
   const nav = useNavigate()
+
+  const loadDisputes = () => api.disputes().then(setDisputes).catch(() => {})
 
   useEffect(() => {
     if (!sid) { setErr('This login has no linked student profile.'); return }
@@ -41,7 +55,31 @@ export default function StudentDashboard() {
     // Student-facing improvement plan. The backend returns supportive,
     // first-person wording when the caller is a student (see /api/students/{sid}/plan).
     api.studentPlan(sid).then(setPlan).catch(() => {})
+    loadDisputes()
   }, [sid])
+
+  useEffect(() => {
+    if (!toast) return
+    const t = setTimeout(() => setToast(''), 2800)
+    return () => clearTimeout(t)
+  }, [toast])
+
+  // Most recent dispute per attendance row, so a row shows its live review state.
+  const byRecord = {}
+  for (const d of disputes) { if (d.recordId && !byRecord[d.recordId]) byRecord[d.recordId] = d }
+
+  async function submitDispute() {
+    if (!disputing) return
+    setBusy(true)
+    try {
+      await api.raiseDispute({ recordId: disputing.id, reason: reason.trim() || undefined })
+      setToast('Sent to your teacher for review — nothing changes until they confirm.')
+      setDisputing(null); setReason('')
+      await loadDisputes()
+    } catch (e) {
+      setToast(e.message || 'Could not send the dispute.')
+    } finally { setBusy(false) }
+  }
 
   if (err) return (<><PageHeader heading="My Dashboard" /><Card body className="text-danger">{err}</Card></>)
   if (!data) return <div className="text-secondary p-4">Loading…</div>
@@ -120,25 +158,62 @@ export default function StudentDashboard() {
         <Card.Header className="fw-bold text-primary">My recent attendance</Card.Header>
         <Card.Body className="p-0">
           <Table responsive className="camu-table mb-0">
-            <thead><tr><th>Date</th><th>Session</th><th>Subject</th><th>Status</th><th>Source</th></tr></thead>
+            <thead><tr><th>Date</th><th>Session</th><th>Subject</th><th>Status</th><th>Source</th><th></th></tr></thead>
             <tbody>
               {recent.length ? recent.map((r) => (
                 <tr key={r.id} className="table-list_body">
                   <td className="fs-3 p-3">{r.date}</td>
                   <td className="fs-3 p-3">{r.session}</td>
-                  <td className="fs-3 p-3">{r.SubNa || '—'}</td>
+                  <td className="fs-3 p-3">{r.subNa || '—'}</td>
                   <td className="fs-3 p-3">
                     <Badge bg={r.status === 'P' ? 'success' : r.status === 'L' ? 'warning' : 'danger'} text={r.status === 'L' ? 'dark' : undefined}>
                       {r.status === 'P' ? 'Present' : r.status === 'L' ? 'Late' : 'Absent'}
                     </Badge>
                   </td>
                   <td className="fs-3 p-3"><Badge bg="light" text="dark">{r.source}</Badge></td>
+                  <td className="fs-3 p-3 text-end">
+                    {r.status === 'P'
+                      ? <span className="text-secondary">—</span>
+                      : byRecord[r.id]
+                        ? <DisputeBadge state={byRecord[r.id].state} />
+                        : <Button variant="secondary" icon="flag" onClick={() => { setDisputing(r); setReason('') }}>Dispute</Button>}
+                  </td>
                 </tr>
-              )) : <tr><td colSpan="5" className="text-center text-secondary p-4">No attendance yet</td></tr>}
+              )) : <tr><td colSpan="6" className="text-center text-secondary p-4">No attendance yet</td></tr>}
             </tbody>
           </Table>
         </Card.Body>
       </Card>
+
+      {/* Dispute modal — logs an "I was present" review item; never edits the
+          log directly. Staff approve/reject from their Disputes queue. */}
+      <Modal show={!!disputing} onHide={() => !busy && setDisputing(null)} centered>
+        <Modal.Header closeButton><Modal.Title>Dispute attendance</Modal.Title></Modal.Header>
+        <Modal.Body>
+          {disputing && (
+            <p className="mb-2">
+              You're flagging <strong>{disputing.date} · {disputing.session}</strong>
+              {disputing.subNa ? <> · {disputing.subNa}</> : null} — currently marked{' '}
+              <strong>{disputing.status === 'L' ? 'Late' : 'Absent'}</strong>.
+            </p>
+          )}
+          <p className="text-secondary fs-3">
+            Tell your teacher what happened (optional). They'll review and correct it if
+            needed — nothing changes automatically.
+          </p>
+          <textarea className="form-control" rows={3} value={reason} maxLength={500}
+            placeholder="e.g. I was in class but the camera didn't recognise me."
+            onChange={(e) => setReason(e.target.value)} />
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={() => setDisputing(null)} disabled={busy}>Cancel</Button>
+          <Button variant="primary" icon="send" onClick={submitDispute} disabled={busy}>
+            {busy ? 'Sending…' : 'Send for review'}
+          </Button>
+        </Modal.Footer>
+      </Modal>
+
+      {toast && <div className="toast-msg">{toast}</div>}
     </>
   )
 }

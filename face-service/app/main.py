@@ -43,7 +43,8 @@ from . import auth as authmod
 from .schemas import (Health, Student, RecognizeResult, PoseAnalysis,
                       EnrollMultiResult,
                       MarkRequest, MarkResult, AttendanceRecord, AttendanceSummary,
-                      Institute, LoginRequest, AuthUser, ChatRequest, AttendanceSet)
+                      Institute, LoginRequest, AuthUser, ChatRequest, AttendanceSet,
+                      DisputeCreate, DisputeResolve)
 
 WEB_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "web")
 
@@ -485,6 +486,49 @@ def attendance_summary(date: Optional[str] = None, user: dict = Depends(current_
 def attendance_roster(date: Optional[str] = None, cls: Optional[str] = None,
                       session: Optional[str] = None, user: dict = Depends(current_user)):
     return get_store().attendance_roster(date=date, cls=cls, session=session, scope=user)
+
+
+# ---- attendance disputes ("I was present") ---------------------------------
+@app.post("/api/attendance/disputes")
+def raise_dispute(req: DisputeCreate, user: dict = Depends(current_user)):
+    """A student flags an attendance row as wrong ("recognition missed me").
+    Logs a review item for staff — it never edits the attendance log itself."""
+    if user.get("type") != "student":
+        raise HTTPException(403, "Only a student can dispute their own attendance")
+    dispute, err = get_store().raise_dispute(user, req.recordId, reason=req.reason)
+    if err == "unknown":
+        raise HTTPException(404, "Attendance record not found")
+    if err == "forbidden":
+        raise HTTPException(403, "You can only dispute your own attendance")
+    if err == "already_present":
+        raise HTTPException(409, "That record is already marked present — nothing to dispute")
+    if err == "duplicate":
+        raise HTTPException(409, "You already have an open dispute for this record")
+    return {"ok": True, "dispute": dispute}
+
+
+@app.get("/api/attendance/disputes")
+def list_disputes(state: Optional[str] = None, user: dict = Depends(current_user)):
+    """Disputes visible to the caller: a student sees their own, staff/admin the
+    queue for their students. Open items first. Filter with ?state=open."""
+    return get_store().list_disputes(user, state=state)
+
+
+@app.post("/api/attendance/disputes/{dispute_id}/resolve")
+def resolve_dispute(dispute_id: str, req: DisputeResolve, user: dict = Depends(current_user)):
+    """Staff/admin resolve a dispute. 'approve' corrects the row to Present;
+    'reject' leaves it unchanged. This is the only path that edits the log."""
+    require_staff(user)
+    dispute, err = get_store().resolve_dispute(user, dispute_id, req.action, note=req.note)
+    if err == "unknown":
+        raise HTTPException(404, "Dispute not found")
+    if err == "forbidden":
+        raise HTTPException(403, "Not permitted to resolve this dispute")
+    if err == "closed":
+        raise HTTPException(409, "This dispute is already resolved")
+    if err == "bad_action":
+        raise HTTPException(400, "action must be 'approve' or 'reject'")
+    return {"ok": True, "dispute": dispute}
 
 
 def _engine_or_503():

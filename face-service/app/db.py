@@ -85,6 +85,7 @@ class Store:
         self.assignments = db[settings.assignments_coll]
         self.staffs = db[settings.staffs_coll]
         self.chat_hist = db[settings.chat_history_coll]
+        self.disputes = db[settings.disputes_coll]
         self._indexed = False
         # Cached gallery (embeddings joined to names). Rebuilt lazily and only when
         # enrollment changes, so live recognition doesn't re-scan Mongo every frame.
@@ -197,6 +198,11 @@ class Store:
                                          ("conversationId", ASCENDING),
                                          ("ts", ASCENDING)])
             self.attn.create_index([("dateAt", DESCENDING)])  # native Date range queries
+            # Disputes: staff queue reads by scope + state, newest first; the
+            # per-record unique-ish lookup guards against duplicate open challenges.
+            self.disputes.create_index([("InId", ASCENDING), ("state", ASCENDING),
+                                        ("createdAt", DESCENDING)])
+            self.disputes.create_index([("StuID", ASCENDING), ("createdAt", DESCENDING)])
             self._indexed = True
 
     # seed() kept as a no-op hook (real data comes from the migration, not from here)
@@ -819,6 +825,133 @@ class Store:
             "by_class": sorted(by_class.values(), key=lambda x: x["cls"]),
             "sessions": sorted(x for x in self.attn.distinct("session", {"date": date, **attn_scope}) if x),
         }
+
+    # -- attendance disputes (student "I was present" challenges) ------------
+    # A dispute is a review item, never a silent edit: raising one only logs the
+    # challenge; the attendance row changes only if staff APPROVE it.
+    @staticmethod
+    def _scope_dispute_query(scope):
+        """Mongo filter fragment limiting the disputes collection to a scope:
+        a student sees their own, staff sees their courses, admin the institute."""
+        if not scope:
+            return {}
+        f = {"InId": scope["InId"]}
+        if scope["type"] == "student":
+            f["StuID"] = scope["sid"]
+        elif scope["type"] == "staff" and scope.get("courses") is not None:
+            f["CrID"] = {"$in": sorted(scope["courses"])}
+        return f
+
+    def _dispute_public(self, d):
+        ts, rt = d.get("createdAt"), d.get("resolvedAt")
+        return {
+            "id": str(d.get("_id", "")), "sid": d.get("StuID"), "name": d.get("StuNa"),
+            "cls": d.get("cls"), "subNa": d.get("SubNa"),
+            "date": d.get("date"), "session": d.get("session"),
+            "recordId": d.get("recordId"), "recordedStatus": d.get("recordedStatus"),
+            "reason": d.get("reason"), "state": d.get("state"),
+            "resolution": d.get("resolution"), "resolvedBy": d.get("resolvedBy"),
+            "corrected": d.get("corrected", False),
+            "createdAt": ts.isoformat() if isinstance(ts, datetime) else ts,
+            "resolvedAt": rt.isoformat() if isinstance(rt, datetime) else rt,
+        }
+
+    def raise_dispute(self, scope, record_id, reason=None):
+        """A student challenges one of their own attendance rows ("I was present").
+        Logs a review item for staff; never edits the attendance log itself.
+        Returns (public_dispute, error) — error in
+        {None,'unknown','forbidden','already_present','duplicate'}."""
+        self.ensure_index()
+        try:
+            oid = ObjectId(record_id)
+        except Exception:
+            return None, "unknown"
+        row = self.attn.find_one({"_id": oid})
+        if not row:
+            return None, "unknown"
+        # A student may only dispute their OWN record — nobody else's.
+        if (not scope or scope.get("type") != "student"
+                or row.get("StuID") != scope.get("sid")):
+            return None, "forbidden"
+        # Nothing to challenge if it's already a present mark.
+        if row.get("status") == "P":
+            return None, "already_present"
+        # At most one OPEN dispute per record, so the queue can't be spammed.
+        if self.disputes.find_one({"recordId": record_id, "state": "open"}):
+            return None, "duplicate"
+        s = self.students.find_one({"StuID": row.get("StuID")},
+                                   {"_id": 0, "CurCrNm": 1, "CurCrCd": 1}) or {}
+        now = datetime.now(timezone.utc)
+        doc = {
+            "InId": row.get("InId"), "CrID": row.get("CrID"),
+            "StuID": row.get("StuID"), "StuNa": row.get("StuNa"),
+            "SubNa": row.get("SubNa"), "cls": s.get("CurCrNm") or s.get("CurCrCd"),
+            "recordId": record_id, "recordedStatus": row.get("status"),
+            "date": row.get("date"), "session": row.get("session"),
+            "reason": ((reason or "").strip()[:500]) or None,
+            "state": "open", "createdAt": now,
+            "resolution": None, "resolvedBy": None, "resolvedAt": None,
+            "corrected": False,
+        }
+        res = self.disputes.insert_one(doc)
+        doc["_id"] = res.inserted_id
+        return self._dispute_public(doc), None
+
+    def list_disputes(self, scope, state=None):
+        """Disputes visible to the caller. Open items first, then newest — so a
+        staff member's queue surfaces the work to do at the top."""
+        q = dict(self._scope_dispute_query(scope))
+        if state:
+            q["state"] = state
+        cur = self.disputes.find(q).sort("createdAt", DESCENDING).limit(500)
+        items = [self._dispute_public(d) for d in cur]
+        items.sort(key=lambda x: x["state"] != "open")   # stable: keeps newest-first
+        return items
+
+    def resolve_dispute(self, scope, dispute_id, action, note=None):
+        """Staff/admin resolve a dispute. 'approve' corrects the attendance row to
+        Present (the only path that mutates the log); 'reject' leaves it unchanged.
+        Scope-checked. Returns (public_dispute, error) — error in
+        {None,'unknown','forbidden','closed','bad_action'}."""
+        self.ensure_index()
+        try:
+            oid = ObjectId(dispute_id)
+        except Exception:
+            return None, "unknown"
+        d = self.disputes.find_one({"_id": oid})
+        if not d:
+            return None, "unknown"
+        scoped = self._scope_dispute_query(scope)
+        if d.get("InId") != scoped.get("InId"):
+            return None, "forbidden"
+        if isinstance(scoped.get("CrID"), dict):        # staff: course-limited
+            if d.get("CrID") not in set(scoped["CrID"].get("$in", [])):
+                return None, "forbidden"
+        if d.get("state") != "open":
+            return None, "closed"
+        if action not in ("approve", "reject"):
+            return None, "bad_action"
+        now = datetime.now(timezone.utc)
+        corrected = False
+        if action == "approve" and d.get("recordId"):
+            try:
+                upd = self.attn.update_one(
+                    {"_id": ObjectId(d["recordId"])},
+                    {"$set": {"status": "P", "updatedAt": now,
+                              "editedBy": scope.get("loginId"),
+                              "correctedFromDispute": str(oid)}})
+                corrected = upd.modified_count > 0
+            except Exception:
+                corrected = False
+        state = "approved" if action == "approve" else "rejected"
+        note = ((note or "").strip()[:500]) or None
+        self.disputes.update_one(
+            {"_id": oid},
+            {"$set": {"state": state, "resolvedBy": scope.get("loginId"),
+                      "resolvedAt": now, "resolution": note, "corrected": corrected}})
+        d.update({"state": state, "resolvedBy": scope.get("loginId"),
+                  "resolvedAt": now, "resolution": note, "corrected": corrected})
+        return self._dispute_public(d), None
 
 
 _store = None

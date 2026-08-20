@@ -93,4 +93,13 @@ export const api = {
     ).toString()
     return j('/api/attendance/roster' + (q ? `?${q}` : ''))
   },
+
+  // attendance disputes ("I was present")
+  raiseDispute: (body) => j('/api/attendance/disputes', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+  }),
+  disputes: (state) => j('/api/attendance/disputes' + (state ? `?state=${state}` : '')),
+  resolveDispute: (id, body) => j(`/api/attendance/disputes/${id}/resolve`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+  }),
 }

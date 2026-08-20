@@ -169,6 +169,18 @@ class AttendanceSet(BaseModel):
     session: Optional[str] = None     # defaults to "Morning"
 
 
+class DisputeCreate(BaseModel):
+    """A student challenging one of their own attendance rows ("I was present")."""
+    recordId: str                     # the attendance row being disputed
+    reason: Optional[str] = None      # optional free-text note (capped server-side)
+
+
+class DisputeResolve(BaseModel):
+    """Staff/admin decision on a dispute."""
+    action: str                       # "approve" (correct to Present) | "reject"
+    note: Optional[str] = None
+
+
 class ChatRequest(BaseModel):
     message: str
     sid: Optional[str] = None             # student currently on screen, for context

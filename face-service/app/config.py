@@ -28,6 +28,9 @@ class Settings:
     institutes_coll: str = _get("FACE_INSTITUTES_COLL", "institutes")
     assignments_coll: str = _get("FACE_ASSIGNMENTS_COLL", "assignments")
     staffs_coll: str = _get("FACE_STAFFS_COLL", "staffs")
+    # Student-raised "I was present" challenges against attendance rows. Its own
+    # collection so a dispute never mutates the attendance log until staff resolve it.
+    disputes_coll: str = _get("FACE_DISPUTES_COLL", "attendance_disputes")
 
     # --- Session tokens -----------------------------------------------------
     # HMAC key used to sign session tokens (see app/auth.py). SET THIS IN

@@ -8,6 +8,7 @@ import StudentDetail from './pages/StudentDetail'
 import TakeAttendance from './pages/TakeAttendance'
 import Records from './pages/Records'
 import Insights from './pages/Insights'
+import Disputes from './pages/Disputes'
 import Chat from './pages/Chat'
 import SelectInstitution from './pages/SelectInstitution'
 import Login from './pages/Login'
@@ -40,6 +41,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
           <Route path="students" element={<RequireRole roles={['admin', 'staff']}><Students /></RequireRole>} />
           <Route path="students/:sid" element={<RequireRole roles={['admin', 'staff']}><StudentDetail /></RequireRole>} />
           <Route path="insights" element={<RequireRole roles={['admin', 'staff']}><Insights /></RequireRole>} />
+          <Route path="disputes" element={<RequireRole roles={['admin', 'staff']}><Disputes /></RequireRole>} />
           <Route path="chat" element={<RequireRole roles={['admin', 'staff']}><Chat /></RequireRole>} />
           {/* Open to all authenticated roles (backend scopes the data to the caller). */}
           <Route path="attendance" element={<TakeAttendance />} />
