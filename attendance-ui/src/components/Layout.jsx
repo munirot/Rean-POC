@@ -12,7 +12,7 @@ const ALL = [
   { to: '/records', label: 'Attendance Records', roles: ['admin', 'staff', 'student'] },
   { to: '/disputes', label: 'Disputes', roles: ['admin', 'staff'] },
   { to: '/insights', label: 'Insights', roles: ['admin', 'staff'] },
-  { to: '/chat', label: 'Ask AI', roles: ['admin', 'staff'] },
+  { to: '/chat', label: 'Ask AI', roles: ['admin', 'staff', 'student'] },
 ]
 
 export default function Layout() {

@@ -209,9 +209,10 @@ def get_cohort_signals(cls: str, user: dict = Depends(current_user)):
 
 @app.post("/api/chat")
 def chat(req: ChatRequest, user: dict = Depends(current_user)):
-    """Grounded staff chat over attendance + assignments, scoped to the caller.
-    Staff/admin only — students use their own dashboard. Persists history."""
-    require_staff(user)
+    """Grounded chat over attendance + assignments, scoped to the caller. Open to
+    any authenticated role: staff/admin ask about their students, a student asks
+    about their own record — scope injection limits every query to what the caller
+    may see, and history is keyed per login. Persists history."""
     store = get_store()
     conv = req.conversationId or uuid.uuid4().hex
     # Prior turns for this conversation give the model context for follow-ups.
@@ -234,20 +235,18 @@ def chat(req: ChatRequest, user: dict = Depends(current_user)):
 
 @app.get("/api/chat/conversations")
 def chat_conversations(user: dict = Depends(current_user)):
-    require_staff(user)
+    # History is keyed per login, so each caller only ever sees their own threads.
     return get_store().list_conversations(user)
 
 
 @app.get("/api/chat/history")
 def chat_history(conversationId: Optional[str] = None, user: dict = Depends(current_user)):
-    require_staff(user)
     return get_store().list_chat(user, conversation_id=conversationId)
 
 
 @app.delete("/api/chat/history")
 def clear_chat_history(conversationId: Optional[str] = None, user: dict = Depends(current_user)):
     """Delete one conversation (conversationId given) or all history (omitted)."""
-    require_staff(user)
     return {"ok": True, "deleted": get_store().clear_chat(user, conversation_id=conversationId)}
 
 

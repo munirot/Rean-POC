@@ -277,6 +277,22 @@ def test_run_intent_injects_scope_and_ignores_inid_override():
     assert q["status"] == "A"        # allowed filter applied
 
 
+def test_run_intent_student_cannot_read_a_classmate():
+    # The security guarantee for self-scoped chat: a student who supplies a filter
+    # on their OWN scope key (StuID) can never swap in a classmate's id — the scope
+    # key is locked, so the extra filter is dropped and the query stays on self.
+    store = _FakeStore()
+    scope = {"InId": "IN001", "type": "student", "sid": "S1", "courses": None}
+    intent = {"action": "query", "collection": "attendance",
+              "filters": [{"field": "StuID", "op": "eq", "value": "S2"},
+                          {"field": "status", "op": "eq", "value": "P"}],
+              "aggregation": "count"}
+    chat.run_intent(store, intent, scope)
+    q = store.attn.last_query
+    assert q["StuID"] == "S1"        # locked to the caller — classmate ignored
+    assert q["status"] == "P"
+
+
 import datetime as _dt
 
 

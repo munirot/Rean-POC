@@ -74,6 +74,28 @@ no tool needed. Use earlier messages for context: resolve "he/she/they/that
 student/what about .../his quizzes" to the student, class, or period discussed
 just before, rather than asking again. Call at most one tool per reply."""
 
+# A student asking about THEIR OWN record. The tools and scope injection already
+# limit every query to this one student, so the model can't reach anyone else's
+# data — this prompt just makes the assistant speak TO the student, supportively.
+STUDENT_SYSTEM_PROMPT = """You are a warm, supportive study assistant for a \
+student. Be genuinely helpful and encouraging — answer general questions, explain \
+ideas, and offer study tips using your own knowledge, like a friendly mentor.
+
+You can see ONLY this student's own attendance, assignments, and progress — never
+any other student's. Any specific fact about their record must come from the
+tools, never from memory or guessing; if the tools don't have it, say so. Speak
+to the student as "you", and keep it supportive, never punitive.
+
+Tools (call at most one, only when you need their school data):
+- get_attendance(period): the student's own present/absent counts or attendance
+  rate for a day or period (e.g. "today", "this month"). The server resolves dates.
+- get_student(student): the student's own attendance, grades, and risk signals.
+- get_plan(student): supportive suggestions for how the student can improve.
+- search_records(collection, filters, aggregation): count/list their own rows.
+
+For anything else — greetings, study advice, general questions — just reply
+naturally, no tool. Use earlier messages to resolve follow-ups. One tool per reply."""
+
 # OpenAI-style tool schemas. The model PICKS a tool; the server still resolves
 # dates and injects the caller's scope when it runs the tool (see run_intent).
 TOOLS = [
@@ -400,7 +422,7 @@ def _resolve_student(store, intent, scope):
         return None, {"kind": "clarify", "query": who, "exact": False,
                       "candidates": _candidate_list(suggestions)}
     return None, {"kind": "not_found",
-                  "text": f"I couldn't find a student matching '{who}' in your classes."}
+                  "text": f"I couldn't find a student matching '{who}' that you can access."}
 
 
 def run_intent(store, intent, scope):
@@ -422,9 +444,11 @@ def run_intent(store, intent, scope):
         _qlog("db.student_plan who=%r -> sid=%s", intent.get("student", ""), sid)
         # Suggestions come from the deterministic builder that the student page
         # uses, NOT from the model — so both surfaces give identical advice and
-        # neither can invent coaching that nobody reviewed.
+        # neither can invent coaching that nobody reviewed. A student asking about
+        # themselves gets the supportive first-person wording (same as Story 2).
+        audience = "student" if (scope or {}).get("type") == "student" else "teacher"
         return {"kind": "student_plan",
-                "data": planmod.build_plan(store.student_profile(sid))}
+                "data": planmod.build_plan(store.student_profile(sid), audience=audience)}
 
     if action == "cohort":
         _qlog("db.cohort class=%r", intent.get("class", ""))
@@ -457,9 +481,14 @@ def run_intent(store, intent, scope):
     coll = intent["collection"]
     base = store._scope_attn_query(scope) if coll == "attendance" else _assignment_scope(scope)
     q = dict(base)
+    # Every key the scope set is LOCKED — InId always, plus StuID for a student
+    # and CrID for staff. A model- or user-supplied filter may add NEW constraints
+    # but can never overwrite a scope key, so a student can't swap their StuID for
+    # a classmate's (or staff a CrID for a course they don't teach) and read rows
+    # they aren't allowed to see. Previously only InId was protected.
+    locked = set(base.keys())
     for f in intent.get("filters", []):
-        # scope-owned keys can be narrowed but never replaced wholesale
-        if f["field"] in ("InId",):
+        if f["field"] in locked:
             continue
         q[f["field"]] = _apply_op(f["op"], f["value"])
     col = store.attn if coll == "attendance" else store.assignments
@@ -526,7 +555,7 @@ def _format_clarify(result):
 # --------------------------------------------------------------------------- #
 # Composition — answer strictly from the returned data
 # --------------------------------------------------------------------------- #
-COMPOSE_SYSTEM = """Answer the staff member's question using ONLY the JSON data \
+COMPOSE_SYSTEM = """Answer the user's question using ONLY the JSON data \
 provided. Rules:
 - Use exact numbers from the data. Never invent, infer, or extrapolate figures.
 - Answer ONLY what was asked. Never add recommendations, next steps, coaching, or
@@ -539,7 +568,7 @@ provided. Rules:
   everyone else in the roster; 'marked'/'records' is how many attendance rows
   exist. If records is 0, state clearly that no attendance has been recorded for
   that day yet — do not imply everyone attended or no one was absent.
-- If results are limited to the staff member's own classes, you may note that.
+- If results are limited to what the user can access, you may note that.
 - Be concise: 1–3 sentences for simple questions."""
 
 
@@ -713,7 +742,10 @@ def answer(store, question, scope, context_sid=None, history=None):
                 "trace": _trace("deterministic", intent=routed, db=result)}
 
     today = settings.now_local().date().isoformat()
-    sys_prompt = SYSTEM_PROMPT + f"\n\nToday's date is {today}."
+    # Students get a supportive, first-person prompt; staff/admin the colleague one.
+    base_prompt = (STUDENT_SYSTEM_PROMPT if (scope or {}).get("type") == "student"
+                   else SYSTEM_PROMPT)
+    sys_prompt = base_prompt + f"\n\nToday's date is {today}."
     try:
         message = _chat_completion(
             [{"role": "system", "content": sys_prompt}]

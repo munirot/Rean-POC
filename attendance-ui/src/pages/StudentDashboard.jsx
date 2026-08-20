@@ -88,6 +88,7 @@ export default function StudentDashboard() {
   return (
     <>
       <PageHeader heading="My Dashboard" subHeading={`${data.name} · ${data.sid}`}>
+        <Button variant="secondary" icon="forum" onClick={() => nav('/chat')}>Ask AI</Button>
         <Button variant="primary" icon="how_to_reg" onClick={() => nav('/attendance')}>Self check-in</Button>
       </PageHeader>
 

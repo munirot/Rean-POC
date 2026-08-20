@@ -5,12 +5,22 @@ import PageHeader from '../components/PageHeader'
 import Button from '../components/Button'
 import { api } from '../api'
 import { fmtDate } from '../utils/time'
+import { getSession } from '../auth'
 
+// Staff/admin ask about their students; a student asks about their own record.
+// The backend scopes every query to the caller, so the student view is safe.
 const SUGGESTIONS = [
   'How many students were absent today?',
   'Who is at risk in Diplomacy & Negotiation?',
   'How is Dara Sok doing?',
   'Which students are missing assignments?',
+]
+
+const MY_SUGGESTIONS = [
+  'How is my attendance this month?',
+  'How many classes have I missed?',
+  'Am I missing any assignments?',
+  'How can I improve?',
 ]
 
 // Shown instead when arriving from a student page, so the first click is useful.
@@ -39,6 +49,7 @@ function Bubble({ m }) {
 }
 
 export default function Chat() {
+  const isStudent = getSession()?.type === 'student'
   const [convos, setConvos] = useState([])
   const [convId, setConvId] = useState(newId())
   const [msgs, setMsgs] = useState([])
@@ -107,8 +118,11 @@ export default function Chat() {
 
   return (
     <>
-      <PageHeader heading="Ask about students"
-        subHeading="Grounded in attendance + assignments — answers cite real records">
+      <PageHeader
+        heading={isStudent ? 'Ask about my record' : 'Ask about students'}
+        subHeading={isStudent
+          ? 'Grounded in your own attendance + assignments — answers cite your real records'
+          : 'Grounded in attendance + assignments — answers cite real records'}>
         <Button variant="primary" icon="add" onClick={newChat}>New chat</Button>
       </PageHeader>
 
@@ -150,7 +164,7 @@ export default function Chat() {
 
             {msgs.length === 0 && (
               <div className="mb-3 d-flex flex-wrap gap-2">
-                {(ctx?.name ? studentSuggestions(ctx.name) : SUGGESTIONS).map((s) => (
+                {(ctx?.name ? studentSuggestions(ctx.name) : isStudent ? MY_SUGGESTIONS : SUGGESTIONS).map((s) => (
                   <Button key={s} variant="secondary" onClick={() => send(s)}>{s}</Button>
                 ))}
               </div>
@@ -163,7 +177,8 @@ export default function Chat() {
 
           <Card body className="shadow-sm mt-3 flex-shrink-0">
             <div className="d-flex gap-2">
-              <input className="form-control" placeholder="Ask about a student or class…"
+              <input className="form-control"
+                placeholder={isStudent ? 'Ask about your attendance or assignments…' : 'Ask about a student or class…'}
                 value={input} onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter') send() }} disabled={busy} />
               <Button variant="primary" icon="send" disabled={busy || !input.trim()} onClick={() => send()}>
@@ -174,7 +189,9 @@ export default function Chat() {
               )}
             </div>
             <div className="text-secondary fs-2 mt-2">
-              Answers are limited to students you have access to. Suggestions are for you to review — not auto-applied.
+              {isStudent
+                ? 'Answers are limited to your own record. This is supportive guidance — talk to your teacher any time.'
+                : 'Answers are limited to students you have access to. Suggestions are for you to review — not auto-applied.'}
             </div>
           </Card>
         </Col>

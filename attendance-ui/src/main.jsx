@@ -42,8 +42,9 @@ ReactDOM.createRoot(document.getElementById('root')).render(
           <Route path="students/:sid" element={<RequireRole roles={['admin', 'staff']}><StudentDetail /></RequireRole>} />
           <Route path="insights" element={<RequireRole roles={['admin', 'staff']}><Insights /></RequireRole>} />
           <Route path="disputes" element={<RequireRole roles={['admin', 'staff']}><Disputes /></RequireRole>} />
-          <Route path="chat" element={<RequireRole roles={['admin', 'staff']}><Chat /></RequireRole>} />
-          {/* Open to all authenticated roles (backend scopes the data to the caller). */}
+          {/* Open to all authenticated roles (backend scopes the data to the caller).
+              Chat scope injection limits a student to their own record (see chat.py). */}
+          <Route path="chat" element={<Chat />} />
           <Route path="attendance" element={<TakeAttendance />} />
           <Route path="records" element={<Records />} />
         </Route>
