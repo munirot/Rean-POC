@@ -29,6 +29,7 @@ export default function StudentDashboard() {
   const [data, setData] = useState(null)
   const [stats, setStats] = useState(null)
   const [recent, setRecent] = useState([])
+  const [plan, setPlan] = useState(null)
   const [err, setErr] = useState('')
   const nav = useNavigate()
 
@@ -37,6 +38,9 @@ export default function StudentDashboard() {
     api.studentProfile(sid).then(setData).catch((e) => setErr(e.message))
     api.studentStats(sid).then(setStats).catch(() => {})
     api.attendance({ sid }).then((r) => setRecent(r.slice(0, 10))).catch(() => {})
+    // Student-facing improvement plan. The backend returns supportive,
+    // first-person wording when the caller is a student (see /api/students/{sid}/plan).
+    api.studentPlan(sid).then(setPlan).catch(() => {})
   }, [sid])
 
   if (err) return (<><PageHeader heading="My Dashboard" /><Card body className="text-danger">{err}</Card></>)
@@ -78,7 +82,41 @@ export default function StudentDashboard() {
         <Col md={6} xl={3}><Stat label="Absent" value={stats ? stats.absent : '—'} color="var(--danger)" /></Col>
       </Row>
 
-      <Card className="mt-2">
+      {/* My progress — at-risk transparency, spoken to the student in supportive
+          language. Loads automatically; no "generate" step, unlike the staff view. */}
+      {plan && (
+        <Card className={`mt-3 ${plan.atRisk ? 'border-warning' : ''}`}>
+          <Card.Header className="fw-bold text-primary d-flex align-items-center gap-2">
+            My progress
+            {plan.onTrack
+              ? <Badge bg="success">On track</Badge>
+              : plan.atRisk
+                ? <Badge bg="warning" text="dark">Needs attention</Badge>
+                : <Badge bg="info" text="dark">A few things to watch</Badge>}
+          </Card.Header>
+          <Card.Body>
+            <p className="fw-semibold text-primary">{plan.summary}</p>
+            {plan.focus?.length > 0 && (
+              <div className="mb-3 d-flex gap-2 flex-wrap">
+                {plan.focus.map((f) => <Badge key={f} bg="light" text="dark">{f}</Badge>)}
+              </div>
+            )}
+            {plan.suggestions.map((s, i) => (
+              <div key={i} className="mb-3">
+                <div className="fw-semibold">
+                  <Badge bg="secondary" className="me-2">{s.area}</Badge>{s.observation}
+                </div>
+                <ul className="mb-0 mt-1">
+                  {s.actions.map((a, k) => <li key={k} className="text-secondary">{a}</li>)}
+                </ul>
+              </div>
+            ))}
+            <div className="text-secondary fs-2 mt-2">{plan.disclaimer}</div>
+          </Card.Body>
+        </Card>
+      )}
+
+      <Card className="mt-3">
         <Card.Header className="fw-bold text-primary">My recent attendance</Card.Header>
         <Card.Body className="p-0">
           <Table responsive className="camu-table mb-0">

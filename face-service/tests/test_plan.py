@@ -56,6 +56,24 @@ def test_disclaimer_present():
     assert "not applied" in plan["disclaimer"].lower()
 
 
+def test_student_audience_speaks_to_the_student():
+    plan = build_plan(_profile(["attendance_low", "missing_assignments"]),
+                      audience="student")
+    assert plan["audience"] == "student"
+    # same grounded numbers, but addressed to the student in first person
+    text = " ".join(s["observation"] for s in plan["suggestions"])
+    assert "60" in text and "3" in text and "Your" in text
+    # supportive framing, not the teacher's "not applied automatically" note
+    assert "penalty" in plan["disclaimer"].lower()
+    assert "not applied" not in plan["disclaimer"].lower()
+
+
+def test_student_on_track_is_encouraging():
+    plan = build_plan(_profile([]), audience="student")
+    assert plan["onTrack"] is True
+    assert "keep it up" in plan["summary"].lower()
+
+
 if __name__ == "__main__":
     import pytest
     raise SystemExit(pytest.main([__file__, "-v"]))

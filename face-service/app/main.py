@@ -187,14 +187,16 @@ def get_student_profile_full(sid: str, user: dict = Depends(current_user)):
 
 @app.get("/api/students/{sid}/plan")
 def get_student_plan(sid: str, user: dict = Depends(current_user)):
-    """Teacher-facing improvement suggestions grounded in the student's signals.
-    Deterministic — never auto-applied to the student."""
+    """Improvement suggestions grounded in the student's signals. Deterministic —
+    never auto-applied. A student viewing their own plan gets supportive,
+    first-person wording; staff/admin get the teacher-facing version."""
     rec = get_store().get(sid)
     if not rec:
         raise HTTPException(404, f"Unknown student {sid}")
     if not get_store().can_view_student(user, rec["raw"]):
         raise HTTPException(403, "Not permitted to view this student")
-    return planmod.build_plan(get_store().student_profile(sid))
+    audience = "student" if user.get("type") == "student" else "teacher"
+    return planmod.build_plan(get_store().student_profile(sid), audience=audience)
 
 
 @app.get("/api/analytics/cohort")
