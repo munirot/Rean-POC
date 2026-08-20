@@ -10,6 +10,14 @@ import { useFaceDetection } from '../hooks/useFaceDetection'
 import { useToast } from '../components/Layout'
 import { getSession } from '../auth'
 
+// Auto-mark confirmation gate. Recognition runs per 500ms frame, and a single
+// mislabeled frame used to mark the wrong student immediately. Instead, the same
+// student must be recognized in at least CONFIRM_MIN_HITS separate cycles within
+// CONFIRM_WINDOW_MS before we auto-mark — genuine presence still confirms in ~1s,
+// but a lone stray frame no longer marks anyone.
+const CONFIRM_MIN_HITS = 2
+const CONFIRM_WINDOW_MS = 2500
+
 export default function TakeAttendance() {
   const session0 = getSession()
   const isStudent = session0?.type === 'student'
@@ -36,6 +44,7 @@ export default function TakeAttendance() {
   const loopRef = useRef(null)
   const runningRef = useRef(false)   // live-detection loop flag (avoids stale cam.active)
   const markedSids = useRef(new Set())
+  const votesRef = useRef(new Map())   // sid -> recent hit timestamps (N-of-M gate)
   const sessionRef = useRef(session)
   const threshRef = useRef(threshold)
   const threshTouched = useRef(false)   // has the operator overridden the server default?
@@ -45,6 +54,7 @@ export default function TakeAttendance() {
   // of only what was marked in this page session.
   useEffect(() => {
     sessionRef.current = session
+    votesRef.current.clear()   // votes are per-session; don't carry across a switch
     api.roster({ date: todayStr(), session }).then((r) => {
       const present = (r.students || []).filter((x) => x.checkedIn)
       markedSids.current = new Set(present.map((x) => x.sid))
@@ -103,16 +113,31 @@ export default function TakeAttendance() {
       ncx: (f.bbox.x + f.bbox.w / 2) / iw, ncy: (f.bbox.y + f.bbox.h / 2) / ih,
       recognized: f.recognized, name: f.name, accuracy: f.accuracy, sid: f.sid, ts: now,
     }))
-    if (autoRef.current) for (const f of res.faces) {
-      if (!f.recognized || !f.sid) continue
-      // students self-check-in: only mark their own face
-      if (isStudent && f.sid !== mySid) continue
-      doMark(f.sid, { source: 'face', similarity: f.similarity })
+    if (autoRef.current) {
+      const votes = votesRef.current
+      for (const f of res.faces) {
+        if (!f.recognized || !f.sid) continue
+        // students self-check-in: only mark their own face
+        if (isStudent && f.sid !== mySid) continue
+        // Record this cycle's confident recognition as a vote, dropping any that
+        // fell outside the window; auto-mark only once the same face has cleared
+        // in CONFIRM_MIN_HITS separate recent cycles.
+        const hits = (votes.get(f.sid) || []).filter((t) => now - t < CONFIRM_WINDOW_MS)
+        hits.push(now)
+        votes.set(f.sid, hits)
+        if (hits.length >= CONFIRM_MIN_HITS) doMark(f.sid, { source: 'face', similarity: f.similarity })
+      }
+      // Prune faces not seen recently so the vote map can't grow unbounded.
+      for (const [sid, hits] of votes) {
+        const keep = hits.filter((t) => now - t < CONFIRM_WINDOW_MS)
+        if (keep.length) votes.set(sid, keep); else votes.delete(sid)
+      }
     }
     return res
   }
   function startLive() {
     runningRef.current = true
+    votesRef.current.clear()
     let last = 0
     // The box tracks the face locally (in-browser), so recognition only needs to
     // run often enough for fresh identity + prompt auto-marking, not for smoothness.
@@ -133,7 +158,7 @@ export default function TakeAttendance() {
   }
   function onStop() {
     runningRef.current = false; cancelAnimationFrame(loopRef.current)
-    det.stop(); labelsRef.current = []; cam.stop()
+    det.stop(); labelsRef.current = []; votesRef.current.clear(); cam.stop()
   }
   useEffect(() => () => { runningRef.current = false; cancelAnimationFrame(loopRef.current); det.stop() }, [])   // eslint-disable-line react-hooks/exhaustive-deps
 
