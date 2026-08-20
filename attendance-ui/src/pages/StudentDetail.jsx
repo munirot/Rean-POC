@@ -50,22 +50,33 @@ function Metric({ label, value, sub }) {
 }
 
 // Teacher-facing improvement suggestions — loaded on demand, never auto-applied.
-function ImprovementPlan({ sid }) {
+// Same deterministic source the chat's get_plan tool uses, so the advice here and
+// the advice in "Ask AI" are always identical. This card needs no language model,
+// which is why it stays even though chat can answer the same question.
+function ImprovementPlan({ sid, name }) {
   const [plan, setPlan] = useState(null)
   const [busy, setBusy] = useState(false)
+  const nav = useNavigate()
 
   async function generate() {
     setBusy(true)
     try { setPlan(await api.studentPlan(sid)) } catch { setPlan(null) } finally { setBusy(false) }
   }
 
+  // Hand the student off to chat for follow-up questions. Passed via router
+  // state rather than a query string so the id stays out of the URL.
+  const discuss = () => nav('/chat', { state: { sid, name } })
+
   return (
     <Card className="mb-4">
       <Card.Header className="d-flex justify-content-between align-items-center">
         <span>Improvement suggestions</span>
-        <Button variant="secondary" icon="lightbulb" disabled={busy} onClick={generate}>
-          {busy ? 'Generating…' : plan ? 'Refresh' : 'Generate'}
-        </Button>
+        <div className="d-flex gap-2">
+          <Button variant="secondary" icon="forum" onClick={discuss}>Discuss in chat</Button>
+          <Button variant="secondary" icon="lightbulb" disabled={busy} onClick={generate}>
+            {busy ? 'Generating…' : plan ? 'Refresh' : 'Generate'}
+          </Button>
+        </div>
       </Card.Header>
       <Card.Body>
         {!plan && !busy && (
@@ -202,7 +213,7 @@ export default function StudentDetail() {
       <StudentSuccess prof={prof} />
 
       {/* teacher-facing improvement suggestions */}
-      <ImprovementPlan sid={s.sid} />
+      <ImprovementPlan sid={s.sid} name={s.name} />
 
       {/* face profile card — guided, motion-based enrollment */}
       <Card>

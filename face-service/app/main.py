@@ -19,8 +19,15 @@ requirement for live camera access.
 """
 import os
 import uuid
+import logging
 from typing import Optional, List
 from contextlib import asynccontextmanager
+
+# Ensure our app loggers (e.g. the chat NLP→query trace) surface in the console.
+# basicConfig only adds a root handler if none exists, so it won't fight uvicorn.
+logging.basicConfig(
+    level=os.getenv("LOG_LEVEL", "INFO"),
+    format="%(asctime)s %(levelname)s %(name)s %(message)s")
 
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Header, Depends
 from fastapi.middleware.cors import CORSMiddleware
@@ -32,7 +39,7 @@ from . import engine as eng
 from . import antispoof as anti
 from . import chat as chatmod
 from . import plan as planmod
-import base64
+from . import auth as authmod
 from .schemas import (Health, Student, RecognizeResult, PoseAnalysis,
                       EnrollMultiResult,
                       MarkRequest, MarkResult, AttendanceRecord, AttendanceSummary,
@@ -68,6 +75,11 @@ async def lifespan(app: FastAPI):
             print(f"[startup] WARNING: anti-spoofing failed to load: {e}")
     else:
         print("[startup] Anti-spoofing DISABLED (ANTISPOOF_ENABLED=false)")
+    if settings.auth_secret_is_ephemeral:
+        print("[startup] WARNING: AUTH_SECRET is not set — signing session tokens "
+              "with a random per-process key.")
+        print("[startup] Everyone is logged out on restart, and tokens will NOT "
+              "verify across uvicorn --workers. Set AUTH_SECRET in .env.")
     yield
 
 
@@ -107,21 +119,24 @@ def login(req: LoginRequest):
     user = get_store().authenticate(req.username, req.password)
     if not user:
         raise HTTPException(401, "Invalid username or password")
-    token = base64.urlsafe_b64encode(f"{user['loginId']}:{user['type']}".encode()).decode()
-    return AuthUser(ok=True, token=token, **user)
+    return AuthUser(ok=True, token=authmod.issue(user["loginId"], user["type"]), **user)
 
 
 def current_user(authorization: Optional[str] = Header(None)) -> dict:
-    """Decode the session token (base64 'loginId:type'), load the login, and
-    return the authorization scope used to filter data. Raises 401 if invalid."""
+    """Verify the signed session token and resolve the caller's authorization
+    scope. Raises 401 if the token is missing, forged, or expired.
+
+    The scope is always recomputed from the live `logins` document rather than
+    read out of the token, so a role or course change applies immediately and a
+    token can never assert more than the login currently grants."""
     if not authorization:
         raise HTTPException(401, "Missing Authorization header")
     token = authorization.split(" ", 1)[1] if " " in authorization else authorization
-    try:
-        login_id = base64.urlsafe_b64decode(token.encode()).decode().split(":", 1)[0]
-    except Exception:
-        raise HTTPException(401, "Invalid session token")
-    scope = get_store().user_scope(get_store().get_login(login_id))
+    claims = authmod.verify(token)
+    if not claims:
+        raise HTTPException(401, "Invalid or expired session token")
+    store = get_store()
+    scope = store.user_scope(store.get_login(claims["loginId"]))
     if not scope:
         raise HTTPException(401, "Unknown session")
     return scope
@@ -200,9 +215,16 @@ def chat(req: ChatRequest, user: dict = Depends(current_user)):
     history = store.list_chat(user, conversation_id=conv)
     result = chatmod.answer(store, req.message, scope=user, context_sid=req.sid,
                             history=history)
-    # Persist both turns so the conversation survives page reloads.
+    if settings.chat_log_queries:
+        ans = (result.get("answer") or "").replace("\n", " ")[:160]
+        logging.getLogger("rean.chat").info(
+            "[chat] conv=%s intent=%s answer=%r", conv[:8], result.get("intent"), ans)
+    # Persist both turns so the conversation survives page reloads. The assistant
+    # turn also stores the NLP→query trace in meta (tool choice, resolved intent,
+    # the actual DB query + counts) for later auditing — surfaced via list_chat.data.
     store.save_chat(user, "user", req.message, conv)
-    store.save_chat(user, "assistant", result.get("answer", ""), conv)
+    store.save_chat(user, "assistant", result.get("answer", ""), conv,
+                    meta=result.get("trace"))
     result["conversationId"] = conv
     return result
 
@@ -403,8 +425,18 @@ async def recognize(file: UploadFile = File(...), threshold: Optional[float] = F
 # ---- attendance ------------------------------------------------------------
 @app.post("/api/attendance", response_model=MarkResult)
 def mark_attendance(req: MarkRequest, user: dict = Depends(current_user)):
-    # Any authenticated user may mark (kiosk or self-service); anonymous is blocked.
-    record, created = get_store().mark_attendance(
+    """Mark a student present (kiosk scan or student self-service).
+
+    Scope-checked like every other student-facing route: staff/admin may mark
+    anyone they can see, and a student login may only mark itself — otherwise any
+    authenticated student could check in a friend by posting their sid."""
+    store = get_store()
+    rec = store.get(req.sid)
+    if not rec:
+        raise HTTPException(404, f"Unknown student {req.sid}")
+    if not store.can_view_student(user, rec["raw"]):
+        raise HTTPException(403, "Not permitted to mark this student")
+    record, created = store.mark_attendance(
         req.sid, session=req.session, source=req.source or "kiosk",
         similarity=req.similarity, date=req.date)
     if record is None:

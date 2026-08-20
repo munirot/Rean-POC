@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
+import { useLocation } from 'react-router-dom'
 import { Row, Col, Card, Badge } from 'react-bootstrap'
 import PageHeader from '../components/PageHeader'
 import Button from '../components/Button'
@@ -10,6 +11,13 @@ const SUGGESTIONS = [
   'Who is at risk in Diplomacy & Negotiation?',
   'How is Dara Sok doing?',
   'Which students are missing assignments?',
+]
+
+// Shown instead when arriving from a student page, so the first click is useful.
+const studentSuggestions = (name) => [
+  `How can I help ${name} improve?`,
+  `How is ${name} doing?`,
+  `Is ${name} missing any assignments?`,
 ]
 
 const newId = () =>
@@ -38,13 +46,19 @@ export default function Chat() {
   const [busy, setBusy] = useState(false)
   const endRef = useRef(null)
 
+  // Student handed over from their detail page ("Discuss in chat"). Sent as
+  // ChatRequest.sid so the server can resolve "he/she/they" to this student.
+  const handoff = useLocation().state
+  const [ctx, setCtx] = useState(handoff?.sid ? handoff : null)
+
   const loadConvos = () => api.chatConversations().then(setConvos).catch(() => {})
 
   // On mount: load the conversation list and open the most recent (if any).
+  // Arriving with a student in tow starts a fresh thread about them instead.
   useEffect(() => {
     api.chatConversations().then((list) => {
       setConvos(list)
-      if (list.length) selectConv(list[0].conversationId)
+      if (!handoff?.sid && list.length) selectConv(list[0].conversationId)
     }).catch(() => {})
   }, [])
 
@@ -54,10 +68,12 @@ export default function Chat() {
     setConvId(newId())
     setMsgs([])
     setInput('')
+    setCtx(null)
   }
 
   async function selectConv(id) {
     setConvId(id)
+    setCtx(null)      // an older thread has its own subject; drop the handoff
     try {
       const h = await api.chatHistory(id)
       setMsgs(h.map((m) => ({ role: m.role, content: m.content })))
@@ -78,7 +94,7 @@ export default function Chat() {
     setMsgs((m) => [...m, { role: 'user', content: q }])
     setBusy(true)
     try {
-      const r = await api.chat(q, convId)
+      const r = await api.chat(q, convId, ctx?.sid)
       if (r.conversationId) setConvId(r.conversationId)
       setMsgs((m) => [...m, { role: 'assistant', content: r.answer, error: r.error }])
       if (isNew) loadConvos()   // surface the new thread in the sidebar
@@ -105,7 +121,7 @@ export default function Chat() {
               {convos.length === 0 && <div className="text-secondary fs-2 p-2">No saved chats yet</div>}
               {convos.map((c) => (
                 <div key={c.conversationId}
-                  onClick={() => selectConv(c.conversationId)}
+                  onClick={() => selectConv(c.conversationId)} 
                   className={`p-2 mb-1 border-b-1 ${c.conversationId === convId ? 'chat_active' : ''}`}
                   style={{ cursor: 'pointer', borderRadius: 6 }}>
                   <div className="text-primary fs-3 text-truncate">{c.title}</div>
@@ -120,22 +136,32 @@ export default function Chat() {
         </Col>
 
         {/* chat thread */}
-        <Col md={9}>
-          {msgs.length === 0 && (
-            <div className="mb-3 d-flex flex-wrap gap-2">
-              {SUGGESTIONS.map((s) => (
-                <Button key={s} variant="secondary" onClick={() => send(s)}>{s}</Button>
-              ))}
-            </div>
-          )}
+        <Col md={9} className="d-flex flex-column"
+          style={{ height: 'calc(100vh - 180px)' }}>
+          {/* scrollable message area */}
+          <div className="flex-grow-1 overflow-auto pe-1">
+            {ctx && (
+              <div className="d-flex align-items-center gap-2 mb-3">
+                <Badge bg="primary">About {ctx.name || ctx.sid}</Badge>
+                <span className="text-secondary fs-2" role="button"
+                  onClick={() => setCtx(null)}>clear</span>
+              </div>
+            )}
 
-          <div className="mb-3">
+            {msgs.length === 0 && (
+              <div className="mb-3 d-flex flex-wrap gap-2">
+                {(ctx?.name ? studentSuggestions(ctx.name) : SUGGESTIONS).map((s) => (
+                  <Button key={s} variant="secondary" onClick={() => send(s)}>{s}</Button>
+                ))}
+              </div>
+            )}
+
             {msgs.map((m, i) => <Bubble key={i} m={m} />)}
             {busy && <div className="text-secondary fs-2 mb-3">Thinking…</div>}
             <div ref={endRef} />
           </div>
 
-          <Card body>
+          <Card body className="shadow-sm mt-3 flex-shrink-0">
             <div className="d-flex gap-2">
               <input className="form-control" placeholder="Ask about a student or class…"
                 value={input} onChange={(e) => setInput(e.target.value)}

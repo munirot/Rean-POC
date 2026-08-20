@@ -370,6 +370,95 @@ def test_format_attendance_normal_day():
     assert "25 of 30" in msg and "5 absent" in msg
 
 
+# --------------------------------------------------------------------------- #
+# get_plan — improvement suggestions come from plan.py, never from the model
+# --------------------------------------------------------------------------- #
+class _PlanStore:
+    """Roster + a profile with real at-risk signals, so build_plan has material."""
+
+    def list_students(self, scope=None):
+        return [{"sid": "S3", "name": "Dara Sok", "cls": "Class A"}]
+
+    def student_profile(self, sid):
+        return {
+            "sid": sid, "name": "Dara Sok", "cls": "Class A",
+            "attendance": {"records": 10, "rate": 60.0, "priorRate": 90.0,
+                           "recentRate": 60.0, "present": 6, "late": 1, "absent": 3},
+            "academics": {"quizAvg": 55.0, "missing": 3, "submitted": 4},
+            "signals": ["attendance_low", "attendance_declining",
+                        "missing_assignments", "quiz_avg_below_60", "at_risk"],
+        }
+
+
+def test_map_get_plan_to_intent():
+    assert chat.map_tool_call("get_plan", {"student": "Dara Sok"}) == \
+        {"action": "student_plan", "student": "Dara Sok", "class_hint": None}
+
+
+def test_student_plan_action_allowed():
+    ok, err = chat.validate_intent({"action": "student_plan", "student": "Dara Sok"})
+    assert ok and err is None
+
+
+def test_run_intent_plan_uses_deterministic_builder():
+    out = chat.run_intent(_PlanStore(), {"action": "student_plan", "student": "Dara Sok"},
+                          scope=None)
+    assert out["kind"] == "student_plan"
+    plan = out["data"]
+    assert plan["atRisk"] is True and plan["onTrack"] is False
+    # every suggestion maps to a real signal, and the disclaimer always rides along
+    assert {s["signal"] for s in plan["suggestions"]} == {
+        "attendance_low", "attendance_declining", "missing_assignments",
+        "quiz_avg_below_60"}
+    assert plan["disclaimer"]
+
+
+def test_plan_is_composed_in_code_not_by_the_llm():
+    """_compose must not call the model for a plan — the wording is pre-reviewed."""
+    out = chat.run_intent(_PlanStore(), {"action": "student_plan", "student": "Dara Sok"},
+                          scope=None)
+
+    def _boom(*a, **k):
+        raise AssertionError("_compose sent the plan to the LLM")
+
+    original = chat._llm
+    chat._llm = _boom
+    try:
+        text = chat._compose("How can I help Dara Sok?", out)
+    finally:
+        chat._llm = original
+    # real numbers from the profile, verbatim from plan.py
+    assert "60.0%" in text and "3 assignment(s)" in text and "55.0%" in text
+    assert "not applied to the student automatically" in text
+
+
+def test_run_intent_plan_clarifies_ambiguous_name():
+    """Shares resolution with student_profile: two Dara Soks must still ask."""
+    store = _ClarifyStore(_ROSTER)
+    out = chat.run_intent(store, {"action": "student_plan", "student": "Dara Sok"},
+                          scope=None)
+    assert out["kind"] == "clarify" and out["exact"] is True
+
+
+def test_run_intent_plan_not_found_stays_grounded():
+    store = _ClarifyStore([])
+    out = chat.run_intent(store, {"action": "student_plan", "student": "Nobody"},
+                          scope=None)
+    assert out["kind"] == "not_found" and "Nobody" in out["text"]
+
+
+def test_composer_prompt_forbids_improvised_advice():
+    """The old prompt allowed the model to coach when asked; it must not now."""
+    assert "get_plan" in chat.COMPOSE_SYSTEM
+    assert "UNLESS the user explicitly asks how to help" not in chat.COMPOSE_SYSTEM
+
+
+def test_get_plan_is_advertised_to_the_model():
+    names = {t["function"]["name"] for t in chat.TOOLS}
+    assert "get_plan" in names
+    assert "get_plan" in chat.SYSTEM_PROMPT
+
+
 if __name__ == "__main__":
     import pytest
     raise SystemExit(pytest.main([__file__, "-v"]))

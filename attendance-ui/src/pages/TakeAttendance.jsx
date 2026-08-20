@@ -16,7 +16,10 @@ export default function TakeAttendance() {
   const mySid = session0?.sid
   const [source, setSource] = useState('face') // 'face' | 'manual'
   const [session, setSession] = useState('Morning')
-  const [threshold, setThreshold] = useState(0.75)
+  // null until /api/health reports the server's MATCH_THRESHOLD. While it is
+  // null we send no threshold at all, so the server's configured value applies;
+  // the slider only overrides it once an operator actually drags it.
+  const [threshold, setThreshold] = useState(null)
   const [autoMark, setAutoMark] = useState(true)
   const [marked, setMarked] = useState([])
   const [toast, setToast] = useToast()
@@ -35,6 +38,7 @@ export default function TakeAttendance() {
   const markedSids = useRef(new Set())
   const sessionRef = useRef(session)
   const threshRef = useRef(threshold)
+  const threshTouched = useRef(false)   // has the operator overridden the server default?
   const autoRef = useRef(autoMark)
   // Seed "already marked" from the server so the page reflects existing
   // attendance (prior check-ins, face scans, or edits made in Records) instead
@@ -51,6 +55,16 @@ export default function TakeAttendance() {
     }).catch(() => { markedSids.current = new Set(); setMarked([]) })
   }, [session])
   useEffect(() => { threshRef.current = threshold }, [threshold])
+  // Show the server's own cutoff on the slider so the number an operator reads is
+  // the one actually in force. A drag that beats this response wins (touched).
+  useEffect(() => {
+    api.health()
+      .then((h) => {
+        if (!threshTouched.current && h?.match_threshold != null)
+          setThreshold(h.match_threshold)
+      })
+      .catch(() => { /* offline: leave null so the server still decides */ })
+  }, [])
   useEffect(() => { autoRef.current = autoMark }, [autoMark])
 
   // Load the roster the first time manual marking is opened.
@@ -75,7 +89,8 @@ export default function TakeAttendance() {
     } catch (e) { markedSids.current.delete(sid); setToast(e.message) }
   }
   async function recognizeBlob(blob) {
-    const res = await api.recognize(blob, threshRef.current)
+    // Omit the threshold unless it was overridden, so MATCH_THRESHOLD applies.
+    const res = await api.recognize(blob, threshTouched.current ? threshRef.current : null)
     // A request already in flight when the camera is stopped resolves ~1-2s later;
     // dropping it here stops a stale box/label from flashing back after stop.
     if (!runningRef.current) return res
@@ -155,9 +170,15 @@ export default function TakeAttendance() {
                 </Col>
                 {source === 'face' && <>
                   <Col xs={7} sm={5}>
-                    <Form.Label className="fs-2 text-secondary fw-semibold mb-1">Strictness {threshold.toFixed(2)}</Form.Label>
-                    <Form.Range min="0.2" max="0.7" step="0.01" value={threshold}
-                      onChange={(e) => setThreshold(parseFloat(e.target.value))} />
+                    <Form.Label className="fs-2 text-secondary fw-semibold mb-1">
+                      Strictness {(threshold ?? 0.35).toFixed(2)}
+                      {!threshTouched.current && <span className="ms-1 opacity-50">(server)</span>}
+                    </Form.Label>
+                    <Form.Range min="0.2" max="0.7" step="0.01" value={threshold ?? 0.35}
+                      onChange={(e) => {
+                        threshTouched.current = true
+                        setThreshold(parseFloat(e.target.value))
+                      }} />
                   </Col>
                   <Col sm={3} className="d-flex align-items-center">
                     <Form.Check type="switch" label="Auto-mark" checked={autoMark}

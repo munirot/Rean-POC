@@ -1,10 +1,17 @@
 """Runtime configuration, all overridable via environment variables (.env)."""
 import os
+import secrets
 from datetime import datetime, timedelta, timezone
 
 
 def _get(name: str, default: str) -> str:
     return os.getenv(name, default)
+
+
+# Fallback signing key, generated once per process when AUTH_SECRET is unset.
+# Secure (unguessable) but not shared: sessions die on restart and do not verify
+# across uvicorn workers, which is why startup warns when this is in use.
+_EPHEMERAL_AUTH_SECRET = secrets.token_urlsafe(32)
 
 
 class Settings:
@@ -21,6 +28,22 @@ class Settings:
     institutes_coll: str = _get("FACE_INSTITUTES_COLL", "institutes")
     assignments_coll: str = _get("FACE_ASSIGNMENTS_COLL", "assignments")
     staffs_coll: str = _get("FACE_STAFFS_COLL", "staffs")
+
+    # --- Session tokens -----------------------------------------------------
+    # HMAC key used to sign session tokens (see app/auth.py). SET THIS IN
+    # PRODUCTION: without it a random per-process key is used, so every restart
+    # logs everyone out and tokens don't verify across uvicorn workers.
+    auth_secret: str = _get("AUTH_SECRET", "")
+    auth_token_ttl_hours: float = float(_get("AUTH_TOKEN_TTL_HOURS", "12"))
+
+    @property
+    def auth_key(self) -> bytes:
+        return (self.auth_secret or _EPHEMERAL_AUTH_SECRET).encode()
+
+    @property
+    def auth_secret_is_ephemeral(self) -> bool:
+        """True when no AUTH_SECRET was configured (dev-only fallback in use)."""
+        return not self.auth_secret
 
     # Student-success signal thresholds (all overridable via env)
     attn_low_rate: float = float(_get("SIGNAL_ATTN_LOW", "75"))          # % present floor
@@ -42,6 +65,25 @@ class Settings:
     chat_row_cap: int = int(_get("CHAT_ROW_CAP", "200")) # max rows a query may read
     chat_history_coll: str = _get("FACE_CHAT_HISTORY_COLL", "chat_history")
     chat_history_limit: int = int(_get("CHAT_HISTORY_LIMIT", "100"))  # msgs returned
+    # Log each chat's NLP→query trace (the LLM's tool choice + the actual DB query
+    # it ran) to the server console. Set "false" to silence in production.
+    chat_log_queries: bool = _get("CHAT_LOG_QUERIES", "true").lower() == "true"
+
+    # Conversation memory replayed to the model each turn. The history token budget
+    # is derived as (model context window − reserved headroom), so it self-adjusts
+    # to whatever model CHAT_BASE_URL/CHAT_MODEL points at and can never silently
+    # over-run it. Size CHAT_MODEL_CONTEXT to your model's REAL context window —
+    # self-hosted runtimes (esp. Ollama) often default to a small window and
+    # truncate the oldest tokens silently, so also raise num_ctx /
+    # OLLAMA_CONTEXT_LENGTH server-side to match. See docs/chat-model.md.
+    chat_model_context: int = int(_get("CHAT_MODEL_CONTEXT", "8192"))    # total tokens
+    chat_reserve_tokens: int = int(_get("CHAT_RESERVE_TOKENS", "4000"))  # system+tools+data+reply
+    chat_context_msgs: int = int(_get("CHAT_CONTEXT_MSGS", "20"))        # hard turn cap
+
+    @property
+    def chat_history_token_budget(self) -> int:
+        """Tokens of prior conversation to replay to the model each turn."""
+        return max(0, self.chat_model_context - self.chat_reserve_tokens)
 
     # InsightFace model
     # buffalo_l = accurate (ArcFace r100, 512-d) · buffalo_s = light/fast
@@ -55,6 +97,12 @@ class Settings:
 
     # Matching (cosine similarity on L2-normalized embeddings, range 0..1)
     match_threshold: float = float(_get("MATCH_THRESHOLD", "0.35"))
+
+    # How long the in-process face gallery may be trusted before re-checking
+    # Mongo for enrollment changes made by ANOTHER process (uvicorn --workers>1).
+    # Our own writes invalidate the cache immediately; this bounds how long a
+    # sibling worker can serve a stale gallery. 0 = check on every recognition.
+    gallery_stamp_ttl_seconds: float = float(_get("GALLERY_STAMP_TTL", "3"))
 
     # Anti-spoofing / liveness (presentation-attack detection)
     # Master switch. Set to "false" for an instant rollback to pure recognition.

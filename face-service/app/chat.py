@@ -18,12 +18,22 @@ data stays on-prem (see config.chat_*).
 """
 import difflib
 import json
+import logging
 import re
 import urllib.request
 import urllib.error
 from datetime import date as _date, datetime, timedelta
 
 from .config import settings
+from . import plan as planmod
+
+log = logging.getLogger("rean.chat")
+
+
+def _qlog(msg, *args):
+    """Trace one step of the NLP→query pipeline (gated by CHAT_LOG_QUERIES)."""
+    if settings.chat_log_queries:
+        log.info("[chat] " + msg, *args)
 
 # --------------------------------------------------------------------------- #
 # Allow-list: the only collections/fields/operators a generated query may touch
@@ -33,8 +43,8 @@ ALLOWED = {
     "attendance": {"StuID", "status", "date", "session", "SubID", "CrID"},
     "assignments": {"Catry", "SubID", "CrID", "StaffID"},
 }
-ACTIONS = {"student_profile", "cohort", "query", "attendance_summary",
-           "attendance_range", "answer"}
+ACTIONS = {"student_profile", "student_plan", "cohort", "query",
+           "attendance_summary", "attendance_range", "answer"}
 
 SYSTEM_PROMPT = """You are a warm, knowledgeable assistant for school staff. Be \
 genuinely helpful and conversational — answer general questions, explain ideas, \
@@ -52,6 +62,9 @@ Tools (call at most one, only when you need school data):
   period. Pass a phrase ("today", "last week", a date) — the server resolves the
   real dates, so you never compute a date yourself.
 - get_student(student): one student's attendance, grades, and risk signals.
+- get_plan(student): what a teacher could do to help one student improve. Use this
+  whenever you are asked how to help, support, or improve a specific student —
+  the suggestions are pre-written and reviewed, so never draft your own advice.
 - get_cohort(class_name): at-risk students in a class.
 - search_records(collection, filters, aggregation): count/list specific rows.
 
@@ -77,6 +90,16 @@ TOOLS = [
         "name": "get_student",
         "description": "One student's full record: attendance, grades, risk signals. "
                        "If several students share a name, the server will ask which one.",
+        "parameters": {"type": "object", "properties": {
+            "student": {"type": "string", "description": "Student name or ID."},
+            "class_name": {"type": "string",
+                           "description": "Optional class/course to disambiguate a shared name."}},
+            "required": ["student"]}}},
+    {"type": "function", "function": {
+        "name": "get_plan",
+        "description": "Improvement suggestions for one student — concrete things a "
+                       "teacher could do about their attendance or assignment problems. "
+                       "Use for any 'how do I help / support / improve X' question.",
         "parameters": {"type": "object", "properties": {
             "student": {"type": "string", "description": "Student name or ID."},
             "class_name": {"type": "string",
@@ -109,6 +132,9 @@ def map_tool_call(name, args):
         return {"action": "attendance_summary", "date": args.get("period") or "today"}
     if name == "get_student":
         return {"action": "student_profile", "student": args.get("student", ""),
+                "class_hint": args.get("class_name")}
+    if name == "get_plan":
+        return {"action": "student_plan", "student": args.get("student", ""),
                 "class_hint": args.get("class_name")}
     if name == "get_cohort":
         return {"action": "cohort", "class": args.get("class_name") or args.get("class", "")}
@@ -356,27 +382,52 @@ def _assignment_scope(scope):
 # --------------------------------------------------------------------------- #
 # Execution (scope always injected; reads only)
 # --------------------------------------------------------------------------- #
+def _resolve_student(store, intent, scope):
+    """Resolve a student reference to one sid within the caller's scope.
+
+    Returns (sid, None) when exactly one student matches, else (None, result)
+    where result is the clarify / not_found response to send back.
+    """
+    who = intent.get("student", "")
+    roster = store.list_students(scope=scope)   # already scope-filtered
+    matches, suggestions = match_students(roster, who, intent.get("class_hint"))
+    if len(matches) == 1:
+        return matches[0]["sid"], None
+    if len(matches) > 1:
+        return None, {"kind": "clarify", "query": who, "exact": True,
+                      "candidates": _candidate_list(matches)}
+    if suggestions:
+        return None, {"kind": "clarify", "query": who, "exact": False,
+                      "candidates": _candidate_list(suggestions)}
+    return None, {"kind": "not_found",
+                  "text": f"I couldn't find a student matching '{who}' in your classes."}
+
+
 def run_intent(store, intent, scope):
     action = intent["action"]
     if action == "answer":
         return {"kind": "answer", "text": intent.get("text", "")}
 
     if action == "student_profile":
-        who = intent.get("student", "")
-        roster = store.list_students(scope=scope)   # already scope-filtered
-        matches, suggestions = match_students(roster, who, intent.get("class_hint"))
-        if len(matches) == 1:
-            return {"kind": "student_profile", "data": store.student_profile(matches[0]["sid"])}
-        if len(matches) > 1:
-            return {"kind": "clarify", "query": who, "exact": True,
-                    "candidates": _candidate_list(matches)}
-        if suggestions:
-            return {"kind": "clarify", "query": who, "exact": False,
-                    "candidates": _candidate_list(suggestions)}
-        return {"kind": "not_found",
-                "text": f"I couldn't find a student matching '{who}' in your classes."}
+        sid, unresolved = _resolve_student(store, intent, scope)
+        if unresolved:
+            return unresolved
+        _qlog("db.student_profile who=%r -> sid=%s", intent.get("student", ""), sid)
+        return {"kind": "student_profile", "data": store.student_profile(sid)}
+
+    if action == "student_plan":
+        sid, unresolved = _resolve_student(store, intent, scope)
+        if unresolved:
+            return unresolved
+        _qlog("db.student_plan who=%r -> sid=%s", intent.get("student", ""), sid)
+        # Suggestions come from the deterministic builder that the student page
+        # uses, NOT from the model — so both surfaces give identical advice and
+        # neither can invent coaching that nobody reviewed.
+        return {"kind": "student_plan",
+                "data": planmod.build_plan(store.student_profile(sid))}
 
     if action == "cohort":
+        _qlog("db.cohort class=%r", intent.get("class", ""))
         return {"kind": "cohort", "data": store.cohort_signals(intent.get("class", ""), scope=scope)}
 
     if action == "attendance_summary":
@@ -393,10 +444,12 @@ def run_intent(store, intent, scope):
                         "data": store.attendance_range(p["start"], p["end"], scope=scope)}
             else:
                 date = None
+        _qlog("db.attendance_summary date=%s scope_InId=%s", date or "today", (scope or {}).get("InId"))
         return {"kind": "attendance_summary", "label": intent.get("_label"),
                 "data": store.attendance_summary(date=date, scope=scope)}
 
     if action == "attendance_range":
+        _qlog("db.attendance_range %s..%s", intent.get("start"), intent.get("end"))
         return {"kind": "attendance_range", "label": intent.get("_label"),
                 "data": store.attendance_range(intent["start"], intent["end"], scope=scope)}
 
@@ -411,9 +464,11 @@ def run_intent(store, intent, scope):
         q[f["field"]] = _apply_op(f["op"], f["value"])
     col = store.attn if coll == "attendance" else store.assignments
     if intent.get("aggregation") == "count":
-        return {"kind": "count", "collection": coll, "query": _safe(q),
-                "count": col.count_documents(q)}
+        n = col.count_documents(q)
+        _qlog("db.query coll=%s agg=count filter=%s -> %s", coll, json.dumps(_safe(q)), n)
+        return {"kind": "count", "collection": coll, "query": _safe(q), "count": n}
     rows = list(col.find(q, {"_id": 0}).limit(settings.chat_row_cap))
+    _qlog("db.query coll=%s agg=list filter=%s -> %s rows", coll, json.dumps(_safe(q)), len(rows))
     return {"kind": "list", "collection": coll, "query": _safe(q),
             "count": len(rows), "rows": _safe(rows)}
 
@@ -421,6 +476,33 @@ def run_intent(store, intent, scope):
 def _safe(obj):
     """JSON-safe copy (drop ObjectId/embeddings/etc.)."""
     return json.loads(json.dumps(obj, default=str))
+
+
+def _db_summary(result):
+    """Compact, PII-light view of the DB step for persisting in chat meta — the
+    query filter and counts, never the returned row payloads."""
+    if not isinstance(result, dict):
+        return None
+    out = {"kind": result.get("kind")}
+    for k in ("collection", "query", "count", "label"):
+        if k in result:
+            out[k] = result[k]
+    return out
+
+
+def _trace(route, tool=None, intent=None, db=None, error=None):
+    """Structured NLP→query trace: how this answer was produced. Returned in the
+    result and stored on the assistant turn in chat_history.meta for auditing."""
+    t = {"route": route}
+    if tool is not None:
+        t["tool"] = tool
+    if intent is not None:
+        t["intent"] = _safe(intent)
+    if db is not None:
+        t["db"] = _db_summary(db)
+    if error is not None:
+        t["error"] = error
+    return t
 
 
 def _candidate_list(rows, limit=6):
@@ -447,8 +529,10 @@ def _format_clarify(result):
 COMPOSE_SYSTEM = """Answer the staff member's question using ONLY the JSON data \
 provided. Rules:
 - Use exact numbers from the data. Never invent, infer, or extrapolate figures.
-- Answer ONLY what was asked. Do NOT add recommendations, next steps, coaching,
-  or commentary UNLESS the user explicitly asks how to help or improve a student.
+- Answer ONLY what was asked. Never add recommendations, next steps, coaching, or
+  commentary of your own. Improvement advice comes exclusively from the get_plan
+  tool, whose wording is pre-reviewed — if the user wants it and you were not given
+  it, say you can pull up suggestions for that student rather than improvising.
 - If the data is empty or a count is 0, say so plainly. Do not spin 0 into a
   positive ("no one absent") — describe what the data actually shows.
 - For attendance summaries: 'present' is students marked present; 'absent' is
@@ -493,9 +577,32 @@ def _format_range(data, label=None):
             f"day{'s' if days != 1 else ''} with records (out of {total} students).")
 
 
+def _format_plan(data):
+    """Render the deterministic plan as chat text.
+
+    Formatted in code, like the attendance answers: the whole point of routing
+    through plan.py is that the advice is fixed and reviewable, so the model must
+    not paraphrase, reorder, or extend it on the way out."""
+    if not data:
+        return "I couldn't build suggestions for that student."
+    head = f"{data.get('name')} ({data.get('cls') or 'no class'}) — {data.get('summary')}"
+    lines = [head]
+    for s in data.get("suggestions") or []:
+        lines.append(f"\n{s.get('area')}: {s.get('observation')}")
+        lines.extend(f"  • {a}" for a in s.get("actions") or [])
+    if not data.get("suggestions"):
+        lines.append("\nNothing to suggest right now.")
+    if data.get("disclaimer"):
+        lines.append(f"\n{data['disclaimer']}")
+    return "\n".join(lines)
+
+
 def _compose(question, result):
     if result["kind"] in ("answer", "not_found"):
         return result["text"]
+    # Improvement suggestions are pre-written; pass them through verbatim.
+    if result["kind"] == "student_plan":
+        return _format_plan(result["data"])
     # Ambiguous / misspelled student name -> deterministic clarifying question.
     if result["kind"] == "clarify":
         return _format_clarify(result)
@@ -515,13 +622,34 @@ def _compose(question, result):
 # --------------------------------------------------------------------------- #
 # Orchestrator
 # --------------------------------------------------------------------------- #
-def _history_msgs(history, limit=6):
-    """Recent turns as OpenAI-style messages, for multi-turn context."""
-    out = []
-    for m in (history or [])[-limit:]:
-        role = m.get("role")
-        if role in ("user", "assistant") and m.get("content"):
-            out.append({"role": role, "content": m["content"]})
+def _est_tokens(text: str) -> int:
+    """Rough, dependency-free token estimate (~4 chars/token). Good enough to keep
+    the prompt inside the model's context window without shipping a tokenizer."""
+    return (len(text) + 3) // 4
+
+
+def _history_msgs(history, max_tokens=None, max_msgs=None):
+    """Recent turns as OpenAI-style messages for multi-turn memory.
+
+    Selects newest-first up to a TOKEN budget (sized to the model's context window,
+    see settings.chat_history_token_budget) and a hard message cap, then returns
+    them chronologically. Because the same budget is applied on every request, the
+    model remembers the conversation identically whether the user is mid-session or
+    reopening it later — and it can never silently over-run a self-hosted model's
+    context window. At least the most recent turn is always kept."""
+    budget = settings.chat_history_token_budget if max_tokens is None else max_tokens
+    cap = settings.chat_context_msgs if max_msgs is None else max_msgs
+    out, used = [], 0
+    for m in reversed(history or []):
+        role, content = m.get("role"), m.get("content")
+        if role not in ("user", "assistant") or not content:
+            continue
+        t = _est_tokens(content)
+        if out and (used + t > budget or len(out) >= cap):
+            break
+        out.append({"role": role, "content": content})
+        used += t
+    out.reverse()
     return out
 
 
@@ -561,6 +689,8 @@ def answer(store, question, scope, context_sid=None, history=None):
     resolves all dates against the server clock. Degrades gracefully."""
     if not settings.chat_enabled:
         return {"answer": "Chat is disabled on this server.", "intent": None}
+    _qlog("Q user=%s type=%s onscreen_sid=%s: %r",
+          (scope or {}).get("loginId"), (scope or {}).get("type"), context_sid, question)
     if context_sid:
         question = f"(current student on screen: {context_sid})\n{question}"
 
@@ -577,8 +707,10 @@ def answer(store, question, scope, context_sid=None, history=None):
     # so follow-ups like "what about last week" continue the attendance topic.
     routed = pre_route(question, history=history)
     if routed is not None:
+        _qlog("route=deterministic (no LLM) intent=%s", routed)
         result = run_intent(store, routed, scope)
-        return {"answer": _compose(question, result), "intent": routed}
+        return {"answer": _compose(question, result), "intent": routed,
+                "trace": _trace("deterministic", intent=routed, db=result)}
 
     today = settings.now_local().date().isoformat()
     sys_prompt = SYSTEM_PROMPT + f"\n\nToday's date is {today}."
@@ -590,28 +722,36 @@ def answer(store, question, scope, context_sid=None, history=None):
     except (urllib.error.URLError, TimeoutError) as e:
         return {"answer": f"Could not reach the language model ({e}). Check that "
                           f"Ollama is running at {settings.chat_base_url}.",
-                "intent": None, "error": "llm_unreachable"}
+                "intent": None, "error": "llm_unreachable",
+                "trace": _trace("llm", error="llm_unreachable")}
     except Exception as e:
         return {"answer": "Something went wrong talking to the language model.",
-                "intent": None, "error": f"llm: {e}"}
+                "intent": None, "error": f"llm: {e}",
+                "trace": _trace("llm", error=f"llm: {e}")}
 
     # No tool call -> the model answered directly (small talk / out of scope).
     name, args = _first_tool_call(message)
     if not name:
+        _qlog("route=llm tool=none (model answered directly, no DB query)")
         return {"answer": (message.get("content") or "").strip()
                 or "I can help with student attendance and assignments — what would "
-                   "you like to know?", "intent": None}
+                   "you like to know?", "intent": None,
+                "trace": _trace("llm_direct")}
 
+    _qlog("route=llm tool=%s args=%s", name, args)
+    tool = {"name": name, "args": _safe(args)}
     intent = map_tool_call(name, args)
     if intent is None:
         return {"answer": "I can only answer questions about attendance and assignments.",
-                "intent": {"tool": name}, "error": "unknown_tool"}
+                "intent": {"tool": name}, "error": "unknown_tool",
+                "trace": _trace("llm", tool=tool, error="unknown_tool")}
 
     ok, err = validate_intent(intent)
     if not ok:
         return {"answer": "I can only answer questions about attendance and "
                           "assignments for students you have access to.",
-                "intent": intent, "error": err}
+                "intent": intent, "error": err,
+                "trace": _trace("llm", tool=tool, intent=intent, error=err)}
 
     result = run_intent(store, intent, scope)
     try:
@@ -619,4 +759,5 @@ def answer(store, question, scope, context_sid=None, history=None):
     except Exception as e:
         final = "I retrieved the data but couldn't summarize it."
         result["compose_error"] = str(e)
-    return {"answer": final, "intent": intent}
+    return {"answer": final, "intent": intent,
+            "trace": _trace("llm", tool=tool, intent=intent, db=result)}

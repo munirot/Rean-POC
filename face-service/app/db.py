@@ -11,13 +11,48 @@
                        face-marking attendance.
 """
 import hashlib
+import hmac
 import re
+import secrets
+import time
 from datetime import datetime, timezone
 import numpy as np
 from pymongo import MongoClient, ASCENDING, DESCENDING
 from bson import ObjectId
 
 from .config import settings
+
+_PBKDF2_ROUNDS = 240_000
+
+
+def hash_password(password: str, rounds: int = _PBKDF2_ROUNDS) -> str:
+    """Salted PBKDF2-SHA256 hash, for newly set passwords."""
+    salt = secrets.token_bytes(16)
+    digest = hashlib.pbkdf2_hmac("sha256", (password or "").encode(), salt, rounds)
+    return f"pbkdf2_sha256${rounds}${salt.hex()}${digest.hex()}"
+
+
+def verify_password(stored: str, password: str) -> bool:
+    """Check a password against a stored hash, in constant time.
+
+    Accepts two formats: the salted PBKDF2 hash written by hash_password(), and
+    the legacy unsalted single-round `sha256$<hex>` the demo data was seeded with
+    (sample-data/seed_sample_data.py), so existing logins keep working. Legacy
+    hashes are weak — identical passwords collide and they're cheap to brute
+    force — so re-hash with hash_password() whenever a password is next set.
+    """
+    stored = stored or ""
+    pw = (password or "").encode()
+    if stored.startswith("pbkdf2_sha256$"):
+        try:
+            _, rounds, salt, digest = stored.split("$", 3)
+            calc = hashlib.pbkdf2_hmac("sha256", pw, bytes.fromhex(salt), int(rounds))
+        except (ValueError, TypeError):
+            return False
+        return hmac.compare_digest(calc.hex(), digest)
+    if stored.startswith("sha256$"):
+        return hmac.compare_digest(stored, "sha256$" + hashlib.sha256(pw).hexdigest())
+    return False
 
 
 def _full_name(s):
@@ -57,6 +92,10 @@ class Store:
         # Vectorized form of the same gallery (stacked matrix + aligned metadata).
         self._gallery_mat = None
         self._gallery_meta = None
+        # Fingerprint of face_embeddings when the cache was built, + when we last
+        # re-checked it. Used to notice enrollments made by OTHER processes.
+        self._gallery_stamp = None
+        self._stamp_checked_at = 0.0
 
     def ping(self):
         self.client.admin.command("ping")
@@ -75,8 +114,7 @@ class Store:
             {"$or": [{"Email": uname.lower()}, {"LoginID": uname}, {"Email": uname}]})
         if not login:
             return None
-        expected = "sha256$" + hashlib.sha256((password or "").encode()).hexdigest()
-        if login.get("pwd") != expected:
+        if not verify_password(login.get("pwd"), password):
             return None
         user = {"name": login.get("Name"), "email": login.get("Email"),
                 "type": login.get("Type"), "InId": login.get("InId"),
@@ -415,12 +453,46 @@ class Store:
         self._gallery_cache = None
         self._gallery_mat = None
         self._gallery_meta = None
+        self._gallery_stamp = None
+        self._stamp_checked_at = 0.0
+
+    def _emb_stamp(self):
+        """(count, latest updatedAt) fingerprint of face_embeddings — one
+        round-trip. Changes on any enroll, re-enroll, or clear, whichever
+        process performed it."""
+        cur = self.emb.aggregate([{"$group": {"_id": None, "n": {"$sum": 1},
+                                             "latest": {"$max": "$updatedAt"}}}])
+        d = next(iter(cur), None) or {}
+        return d.get("n", 0), str(d.get("latest"))
+
+    def _ensure_fresh_gallery(self):
+        """Drop the cached gallery if another process changed enrollments.
+
+        Our own writes call _invalidate_gallery() directly, so this exists purely
+        to catch writes by SIBLING processes (uvicorn --workers > 1), which would
+        otherwise keep serving a stale gallery for the life of the worker — a
+        newly-enrolled student would simply never be recognized there. Throttled
+        to one cheap aggregate every GALLERY_STAMP_TTL seconds so the live
+        recognition loop isn't issuing an extra query on every frame."""
+        if self._gallery_cache is None and self._gallery_mat is None:
+            return                      # nothing cached; the next build reads fresh
+        now = time.monotonic()
+        if now - self._stamp_checked_at < settings.gallery_stamp_ttl_seconds:
+            return
+        self._stamp_checked_at = now
+        try:
+            stamp = self._emb_stamp()
+        except Exception:
+            return                      # Mongo hiccup — keep serving what we have
+        if stamp != self._gallery_stamp:
+            self._invalidate_gallery()
 
     def gallery_matrix(self):
         """(matrix, meta) form of the gallery for vectorized matching.
         matrix: float32 (N, D) of L2-normalized embeddings (one row per angle);
         meta:   list of {sid, name, cls} aligned to matrix rows. Cached with the
         gallery and invalidated together on any enrollment change."""
+        self._ensure_fresh_gallery()
         if self._gallery_mat is not None:
             return self._gallery_mat, self._gallery_meta
         g = self.gallery()
@@ -440,8 +512,18 @@ class Store:
         docs (emb) — best_match takes the max similarity across all rows, so extra
         angles only improve recall. Cached until enrollment changes so the live
         recognition loop doesn't re-scan Mongo on every frame."""
+        self._ensure_fresh_gallery()
         if self._gallery_cache is not None:
             return self._gallery_cache
+        # Fingerprint BEFORE reading the vectors: if a write lands mid-read we
+        # record the older stamp and rebuild on the next check. Stamping after
+        # the read could pin a stamp newer than the data we actually loaded and
+        # leave the cache stale for good.
+        try:
+            self._gallery_stamp = self._emb_stamp()
+        except Exception:
+            self._gallery_stamp = None
+        self._stamp_checked_at = time.monotonic()
         name_by_sid = {}
         for s in self.students.find({}, {"_id": 0}):
             name_by_sid[_student_sid(s)] = (_full_name(s), _student_class(s))
