@@ -312,9 +312,11 @@ function CapturePolicies({ setToast }) {
       <Card.Body>
         {!camEnabled && (
           <Alert variant="secondary" className="fs-3 mb-3">
-            Whole-class camera capture is <strong>not enabled</strong> on this server
-            (<code>CLASS_CAM_ENABLED=false</code>), so only individual scan can be
-            selected. The capture pipeline for it isn't built yet.
+            <strong>Whole-class camera capture is not built yet.</strong> There is a
+            design and a measurement script for it, but no code that reads a
+            classroom camera or marks a class from one — so the mode is not
+            selectable. <code>CLASS_CAM_ENABLED</code> only unlocks the setting for
+            development; it does not add the capability.
           </Alert>
         )}
         {err && <Alert variant="danger" className="fs-3">{err}</Alert>}
@@ -392,8 +394,12 @@ function CapturePolicies({ setToast }) {
             <Form.Select size="sm" value={draft.mode}
               onChange={(e) => setDraft({ ...draft, mode: e.target.value })}>
               <option value="individual">Individual scan</option>
-              <option value="class_camera" disabled={!camEnabled}>Whole-class camera</option>
-              <option value="both" disabled={!camEnabled}>Both</option>
+              <option value="class_camera" disabled={!camEnabled}>
+                Whole-class camera{camEnabled ? '' : ' — not built yet'}
+              </option>
+              <option value="both" disabled={!camEnabled}>
+                Both{camEnabled ? '' : ' — not built yet'}
+              </option>
             </Form.Select>
           </div>
           {draft.mode === 'class_camera' && (
