@@ -145,6 +145,35 @@ def score_pairs(templates, probes):
     return np.array(genuine), np.array(impostor), rank1
 
 
+def genuine_margins(templates, probes):
+    """Per genuine probe, the lead of the true identity over the best OTHER
+    identity: margin = cosine(true) - max cosine(any wrong identity).
+
+    This is exactly what the runtime ambiguity guard (MATCH_MARGIN) tests. A small
+    or negative margin is a near-confusion; a healthy one is a confident match. The
+    distribution lets us pick a MATCH_MARGIN that rejects near-ties while passing
+    the vast majority of real matches."""
+    ids = list(templates.keys())
+    mat = np.stack([templates[i] for i in ids])
+    idx = {i: k for k, i in enumerate(ids)}
+    out = []
+    for true_id, emb in probes:
+        sims = mat @ emb
+        gi = idx[true_id]
+        best_other = np.max(np.delete(sims, gi)) if len(ids) > 1 else -1.0
+        out.append(float(sims[gi] - best_other))
+    return np.array(out)
+
+
+def recommend_margin(margins, percentile):
+    """MATCH_MARGIN at the given low percentile of genuine margins (clamped >=0):
+    setting the guard here rejects roughly `percentile`% of real matches (the
+    least-separated ones) while catching ambiguous look-alikes below it."""
+    if margins.size == 0:
+        return 0.0
+    return round(max(0.0, float(np.percentile(margins, percentile))), 3)
+
+
 def sweep(genuine, impostor, thresholds):
     """FAR = impostors accepted; FRR = genuine rejected; TAR = 1-FRR."""
     rows = []
@@ -210,6 +239,9 @@ def main():
                     help="skip identities with fewer usable images (default 2)")
     ap.add_argument("--far-target", type=float, default=0.01,
                     help="operating point: max acceptable false-accept rate (default 0.01)")
+    ap.add_argument("--margin-percentile", type=float, default=1.0,
+                    help="MATCH_MARGIN is set at this percentile of genuine margins "
+                         "(default 1.0 => ~1%% of real matches rejected by the guard)")
     ap.add_argument("--tmin", type=float, default=0.20)
     ap.add_argument("--tmax", type=float, default=0.70)
     ap.add_argument("--tstep", type=float, default=0.01)
@@ -236,6 +268,8 @@ def main():
             args.data, args.gallery_per_id, args.min_images, args.seed)
 
     genuine, impostor, rank1 = score_pairs(templates, probes)
+    margins = genuine_margins(templates, probes)
+    rec_margin = recommend_margin(margins, args.margin_percentile)
     thresholds = np.arange(args.tmin, args.tmax + 1e-9, args.tstep)
     rows = sweep(genuine, impostor, thresholds)
     eer_row, eer = find_eer(rows)
@@ -263,8 +297,14 @@ def main():
             print(f"   {r['threshold']:.2f}    | {r['FAR']*100:6.2f}% | "
                   f"{r['FRR']*100:6.2f}% | {r['TAR']*100:6.2f}%")
 
+    print(f"\nGenuine margin (true-id lead over best other id):  mean "
+          f"{margins.mean():.3f}   p5 {np.percentile(margins, 5):.3f}   "
+          f"p1 {np.percentile(margins, 1):.3f}")
+
     print(f"\n>>> RECOMMENDED MATCH_THRESHOLD = {recommended}  "
           f"(set this in .env; bias toward low FAR for attendance)")
+    print(f">>> RECOMMENDED MATCH_MARGIN    = {rec_margin}  "
+          f"(rejects near-ties at the p{args.margin_percentile:g} genuine margin)")
 
     # ---- artifacts ----
     summary = {
@@ -276,6 +316,11 @@ def main():
         "far_target": args.far_target,
         "operating_threshold": recommended,
         "operating_point": op_row, "sweep": rows,
+        "genuine_margin_mean": float(margins.mean()),
+        "genuine_margin_p1": float(np.percentile(margins, 1)),
+        "genuine_margin_p5": float(np.percentile(margins, 5)),
+        "margin_percentile": args.margin_percentile,
+        "recommended_margin": rec_margin,
     }
     with open(args.out + ".json", "w") as f:
         json.dump(summary, f, indent=2)

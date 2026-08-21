@@ -105,6 +105,7 @@ def health():
     return Health(
         status="ok", model_pack=settings.model_pack, device=settings.device,
         det_size=settings.det_size, match_threshold=settings.match_threshold,
+        match_margin=settings.match_margin,
         students=(store.count() if mongo == "up" else 0),
         enrolled=(store.enrolled_count() if mongo == "up" else 0),
         mongo=mongo,
@@ -424,7 +425,7 @@ def _recognize_sync(data: bytes, threshold, source, user) -> RecognizeResult:
         # Liveness first — a matched identity is only trusted if the face is live.
         live = _liveness(img, face, live_thr)
         emb = engine.embedding(face)
-        m = eng.best_match_vec(emb, mat, meta, thr)
+        m = eng.best_match_vec(emb, mat, meta, thr, margin=settings.match_margin)
         id_ok = m.get("recognized", False)
         # Combined gate: accept only when identity matches AND liveness passes.
         recognized = id_ok and (live["live"] if live is not None else True)

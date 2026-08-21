@@ -145,24 +145,42 @@ def best_match(emb: np.ndarray, gallery, threshold: float):
     return best
 
 
-def best_match_vec(emb: np.ndarray, mat: np.ndarray, meta, threshold: float):
-    """Vectorized version of best_match.
+def best_match_vec(emb: np.ndarray, mat: np.ndarray, meta, threshold: float,
+                   margin: float = 0.0):
+    """Vectorized version of best_match, with an optional ambiguity guard.
 
     mat:  (N, D) float32 of L2-normalized gallery embeddings (one row per angle).
     meta: list of {sid, name, cls} aligned to mat's rows.
     Because both sides are L2-normalized, `mat @ emb` gives cosine similarity for
     every enrolled angle in a single BLAS call — O(1) Python, scales to large
-    rosters far better than a per-row loop."""
+    rosters far better than a per-row loop.
+
+    `margin` (>0) rejects near-ties: the top identity must beat the best OTHER
+    identity by at least `margin` cosine. Extra enrolled angles of the SAME
+    student don't count as competition, so multi-angle enrollment never trips the
+    guard. A rejected near-tie returns recognized=False, reason='ambiguous' — we'd
+    rather mark nobody than mark a look-alike."""
     if mat is None or mat.shape[0] == 0:
         return {"recognized": False, "reason": "no_enrolled_students",
-                "similarity": 0.0, "accuracy": 0.0}
+                "similarity": 0.0, "accuracy": 0.0, "gap": 0.0}
     sims = mat @ emb                       # (N,) cosine similarities
     i = int(np.argmax(sims))
     sim = float(sims[i])
     m = meta[i]
-    return {
+    # Runner-up from a different student (same-sid angles excluded). gap == 1.0
+    # (unambiguous) when only one identity is enrolled.
+    other = np.array([mm.get("sid") != m["sid"] for mm in meta], dtype=bool)
+    runner_up = float(np.max(sims[other])) if other.any() else -1.0
+    gap = (sim - runner_up) if runner_up > -1.0 else 1.0
+    id_ok = sim >= threshold
+    ambiguous = id_ok and margin > 0.0 and gap < margin
+    out = {
         "sid": m["sid"], "name": m["name"], "cls": m.get("cls"),
-        "recognized": sim >= threshold,
+        "recognized": id_ok and not ambiguous,
         "accuracy": round(max(0.0, min(1.0, sim)) * 100.0, 1),
         "similarity": round(sim, 4),
+        "gap": round(gap, 4),
     }
+    if ambiguous:
+        out["reason"] = "ambiguous"
+    return out

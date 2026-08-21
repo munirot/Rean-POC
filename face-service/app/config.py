@@ -100,6 +100,12 @@ class Settings:
 
     # Matching (cosine similarity on L2-normalized embeddings, range 0..1)
     match_threshold: float = float(_get("MATCH_THRESHOLD", "0.35"))
+    # Ambiguity guard: the best identity must beat the runner-up (a DIFFERENT
+    # student — extra angles of the same student never count) by at least this
+    # cosine margin, else the match is rejected as "ambiguous" rather than risk
+    # marking a look-alike. 0 disables the guard. Calibrate with eval/benchmark.py
+    # (it reports a recommended value). See docs/face-matching-tuning.md.
+    match_margin: float = float(_get("MATCH_MARGIN", "0.05"))
 
     # How long the in-process face gallery may be trusted before re-checking
     # Mongo for enrollment changes made by ANOTHER process (uvicorn --workers>1).

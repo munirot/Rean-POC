@@ -9,6 +9,7 @@ class Health(BaseModel):
     device: str
     det_size: int
     match_threshold: float
+    match_margin: float = 0.0
     students: int
     enrolled: int
     mongo: str
