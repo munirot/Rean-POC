@@ -218,6 +218,12 @@ def chat(req: ChatRequest, user: dict = Depends(current_user)):
     may see, and history is keyed per login. Persists history."""
     store = get_store()
     conv = req.conversationId or uuid.uuid4().hex
+    # Per-login rate limit: protects the shared LLM from a runaway client (students
+    # chat too now). Rejected turns aren't persisted and never reach the model.
+    if not chatmod.rate_limit_ok(user.get("loginId")):
+        return {"answer": "You're sending messages a bit fast — give it a few "
+                          "seconds and try again.", "intent": None,
+                "error": "rate_limited", "conversationId": conv}
     # Prior turns for this conversation give the model context for follow-ups.
     history = store.list_chat(user, conversation_id=conv)
     result = chatmod.answer(store, req.message, scope=user, context_sid=req.sid,

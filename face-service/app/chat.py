@@ -20,6 +20,8 @@ import difflib
 import json
 import logging
 import re
+import threading
+import time
 import urllib.request
 import urllib.error
 from datetime import date as _date, datetime, timedelta
@@ -28,6 +30,38 @@ from .config import settings
 from . import plan as planmod
 
 log = logging.getLogger("rean.chat")
+
+
+class ChatBusy(Exception):
+    """Raised when no LLM slot is free — chat is at capacity. The caller turns
+    this into a friendly 'try again' rather than holding a worker for the timeout."""
+
+
+# Caps concurrent LLM calls so a burst of slow completions can't occupy every
+# threadpool worker and starve face recognition (which shares that pool).
+_llm_slots = threading.BoundedSemaphore(max(1, settings.chat_max_concurrency))
+
+# Per-login token bucket for rate limiting. login_id -> (tokens, last_ts).
+_rate_state = {}
+_rate_lock = threading.Lock()
+
+
+def rate_limit_ok(login_id, now=None):
+    """True if this login may send another message now. A token bucket of
+    CHAT_RATE_PER_MIN tokens refilling over a minute; 0 disables the limit."""
+    cap = settings.chat_rate_per_min
+    if cap <= 0:
+        return True
+    now = time.time() if now is None else now
+    key = login_id or "_anon"
+    with _rate_lock:
+        tokens, last = _rate_state.get(key, (float(cap), now))
+        tokens = min(float(cap), tokens + (now - last) * (cap / 60.0))  # refill
+        if tokens < 1.0:
+            _rate_state[key] = (tokens, now)
+            return False
+        _rate_state[key] = (tokens - 1.0, now)
+        return True
 
 
 def _qlog(msg, *args):
@@ -185,8 +219,15 @@ def _chat_completion(messages, tools=None, force_json=False):
         headers={"Content-Type": "application/json",
                  "Authorization": f"Bearer {settings.chat_api_key}"},
         method="POST")
-    with urllib.request.urlopen(req, timeout=settings.chat_timeout) as r:
-        data = json.loads(r.read().decode())
+    # Bounded concurrency: hold a slot only for the network call. If none frees up
+    # within the wait, fail fast so this worker isn't pinned for the full timeout.
+    if not _llm_slots.acquire(timeout=settings.chat_acquire_timeout):
+        raise ChatBusy()
+    try:
+        with urllib.request.urlopen(req, timeout=settings.chat_timeout) as r:
+            data = json.loads(r.read().decode())
+    finally:
+        _llm_slots.release()
     return data["choices"][0]["message"]
 
 
@@ -652,9 +693,17 @@ def _compose(question, result):
 # Orchestrator
 # --------------------------------------------------------------------------- #
 def _est_tokens(text: str) -> int:
-    """Rough, dependency-free token estimate (~4 chars/token). Good enough to keep
-    the prompt inside the model's context window without shipping a tokenizer."""
-    return (len(text) + 3) // 4
+    """Rough, dependency-free token estimate. ASCII-heavy text runs ~4 chars/token,
+    but Khmer/CJK and other non-Latin scripts tokenize to far more tokens per
+    character — a plain len/4 badly under-counts Khmer student names and messages
+    and would silently overrun the context window. Count non-ASCII codepoints at
+    ~1 token each; over-estimating there keeps the replayed history safely inside
+    the window."""
+    if not text:
+        return 1
+    ascii_n = sum(1 for c in text if ord(c) < 128)
+    other_n = len(text) - ascii_n
+    return max(1, ascii_n // 4 + other_n)
 
 
 def _history_msgs(history, max_tokens=None, max_msgs=None):
@@ -751,6 +800,10 @@ def answer(store, question, scope, context_sid=None, history=None):
             [{"role": "system", "content": sys_prompt}]
             + _history_msgs(history)
             + [{"role": "user", "content": question}], tools=TOOLS)
+    except ChatBusy:
+        return {"answer": "The assistant is handling a lot of requests right now — "
+                          "please try again in a moment.",
+                "intent": None, "error": "busy", "trace": _trace("llm", error="busy")}
     except (urllib.error.URLError, TimeoutError) as e:
         return {"answer": f"Could not reach the language model ({e}). Check that "
                           f"Ollama is running at {settings.chat_base_url}.",

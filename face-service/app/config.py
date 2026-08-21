@@ -66,6 +66,15 @@ class Settings:
     chat_temperature: float = float(_get("CHAT_TEMPERATURE", "0.3"))
     chat_timeout: int = int(_get("CHAT_TIMEOUT", "60"))  # seconds per LLM call
     chat_row_cap: int = int(_get("CHAT_ROW_CAP", "200")) # max rows a query may read
+    # Isolation & fairness. Chat runs in the app's threadpool, now shared with face
+    # inference (recognize/enroll offload there too). An unbounded burst of slow
+    # LLM calls could tie up every worker and stall recognition, so cap how many
+    # LLM calls may be in flight at once; past that, chat fails fast with a "busy"
+    # message instead of holding a worker for the full timeout. Per-login rate
+    # limiting protects the shared model from a runaway client (students chat too).
+    chat_max_concurrency: int = int(_get("CHAT_MAX_CONCURRENCY", "3"))
+    chat_acquire_timeout: float = float(_get("CHAT_ACQUIRE_TIMEOUT", "2"))  # wait for a slot
+    chat_rate_per_min: int = int(_get("CHAT_RATE_PER_MIN", "20"))           # 0 disables
     chat_history_coll: str = _get("FACE_CHAT_HISTORY_COLL", "chat_history")
     chat_history_limit: int = int(_get("CHAT_HISTORY_LIMIT", "100"))  # msgs returned
     # Log each chat's NLP→query trace (the LLM's tool choice + the actual DB query
