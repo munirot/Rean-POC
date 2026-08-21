@@ -1012,6 +1012,19 @@ class Store:
             upsert=True)
         return cleaned, None
 
+    def _session_counts(self, in_id):
+        """{session label: row count} for an institute.
+
+        Grouped inside Mongo. `attendance` is by far the largest collection here
+        and grows forever, so counting labels by streaming every row into Python
+        would make this endpoint get slower every single day it runs."""
+        out = {}
+        for g in self.attn.aggregate([{"$match": {"InId": in_id}},
+                                      {"$group": {"_id": "$session",
+                                                  "n": {"$sum": 1}}}]):
+            out[g.get("_id")] = g.get("n", 0)
+        return out
+
     def audit_sessions(self, in_id):
         """Read-only pre-rollout check (attendance-policy-plan §9): how the session
         labels already in `attendance` line up with the configured periods.
@@ -1027,10 +1040,7 @@ class Store:
                          several, allowing duplicate rows for the same sitting.
         """
         periods = self.get_periods(in_id)
-        counts = {}
-        for r in self.attn.find({"InId": in_id}, {"_id": 0, "session": 1}):
-            v = r.get("session")
-            counts[v] = counts.get(v, 0) + 1
+        counts = self._session_counts(in_id)
         by_canon = {}
         for value in counts:
             by_canon.setdefault((value or "").strip().lower(), []).append(value)

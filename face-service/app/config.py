@@ -3,6 +3,19 @@ import os
 import secrets
 from datetime import datetime, timedelta, timezone
 
+# Load face-service/.env ourselves. run-all.sh already sources it into the shell,
+# but anyone starting uvicorn directly (or running a script, or an eval harness)
+# would otherwise get defaults while a perfectly good .env sat next to them —
+# silently, since every setting has a fallback. Real environment variables win,
+# so an explicit `FOO=bar uvicorn ...` still overrides the file.
+try:
+    from dotenv import load_dotenv
+
+    load_dotenv(os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env"))
+except ImportError:      # python-dotenv absent: rely on the shell, as before
+    pass
+
 
 def _get(name: str, default: str) -> str:
     return os.getenv(name, default)

@@ -14,7 +14,7 @@ const ALL = [
   { to: '/leave', label: 'Leave requests', roles: ['admin', 'staff'] },
   { to: '/insights', label: 'Insights', roles: ['admin', 'staff'] },
   { to: '/chat', label: 'Ask AI', roles: ['admin', 'staff', 'student'] },
-  { to: '/settings', label: 'Settings', roles: ['admin'] },
+  // Settings is reached from the gear in the right-hand rail, not this list.
 ]
 
 export default function Layout() {
@@ -74,8 +74,15 @@ export default function Layout() {
         <div className="nav-more_option">
           <div className="right-nav_list">
             <div className="side-nav_list" title="Profile"><MatIcon name="account_circle" /></div>
-            <div className="side-nav_list" title="Settings"><MatIcon name="settings" /></div>
-            <div className="side-nav_list" title="Logout" onClick={logout}><MatIcon name="logout" /></div>
+            {/* Institution configuration — only an admin has anything to open here. */}
+            {role === 'admin' && (
+              <div className={`side-nav_list${loc.pathname.startsWith('/settings') ? ' menu_active' : ''}`}
+                title="Settings" role="button" onClick={() => nav('/settings')}>
+                <MatIcon name="settings" />
+              </div>
+            )}
+            <div className="side-nav_list" title="Logout" role="button" onClick={logout}>
+              <MatIcon name="logout" /></div>
           </div>
         </div>
       </div>

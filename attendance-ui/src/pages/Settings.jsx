@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Card, Table, Form, Badge, Alert } from 'react-bootstrap'
 import PageHeader from '../components/PageHeader'
 import Button from '../components/Button'
@@ -157,9 +157,23 @@ export default function Settings() {
 function SessionAudit() {
   const [a, setA] = useState(null)
   const [err, setErr] = useState('')
+  const [busy, setBusy] = useState(false)
+  // The audit scans the attendance log, and its answer only changes when periods
+  // change — so fetch it once. The ref also absorbs StrictMode's double effect
+  // invocation in dev, which would otherwise fire this twice on every visit.
+  const fetched = useRef(false)
+
+  const run = () => {
+    setBusy(true)
+    api.adminSessionAudit().then((r) => { setA(r); setErr('') })
+      .catch((e) => setErr(e.message))
+      .finally(() => setBusy(false))
+  }
 
   useEffect(() => {
-    api.adminSessionAudit().then(setA).catch((e) => setErr(e.message))
+    if (fetched.current) return
+    fetched.current = true
+    run()
   }, [])
 
   if (err) return <Alert variant="danger" className="fs-3 mt-4">{err}</Alert>
@@ -175,6 +189,11 @@ function SessionAudit() {
         {clean && <Badge bg="success">Ready</Badge>}
         {!!a.unmatchedRecords && <Badge bg="danger">{a.unmatchedRecords} would be refused</Badge>}
         {!!a.variantGroups && <Badge bg="warning" text="dark">{a.variantGroups} label variant(s)</Badge>}
+        <span className="ms-auto">
+          <Button variant="secondary" icon="refresh" disabled={busy} onClick={run}>
+            {busy ? 'Checking…' : 'Re-check'}
+          </Button>
+        </span>
       </Card.Header>
       <Card.Body>
         <p className="fs-3 text-secondary">

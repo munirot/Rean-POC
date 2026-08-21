@@ -29,6 +29,12 @@ def _store(sessions, periods=()):
     s = object.__new__(Store)
     s.attn = _Col([{"InId": "IN1", "session": v} for v in sessions])
     s.get_periods = lambda in_id: list(periods)
+    # The counting is a Mongo $group (see Store._session_counts); stub it so these
+    # tests stay about the audit logic rather than re-implementing an aggregation.
+    counts = {}
+    for v in sessions:
+        counts[v] = counts.get(v, 0) + 1
+    s._session_counts = lambda in_id: dict(counts)
     return s
 
 
@@ -84,6 +90,23 @@ def test_audit_reads_nothing_but_sessions():
     before = [dict(d) for d in s.attn.docs]
     s.audit_sessions("IN1")
     assert s.attn.docs == before
+
+
+def test_session_counts_uses_a_read_only_aggregation():
+    """The count runs in Mongo. Pin that it stays a $match/$group read — an
+    aggregation that grew a $out/$merge stage would start writing collections."""
+    seen = {}
+
+    class _Agg:
+        def aggregate(self, pipeline):
+            seen["pipeline"] = pipeline
+            return [{"_id": "Morning", "n": 3}]
+
+    s = object.__new__(Store)
+    s.attn = _Agg()
+    assert s._session_counts("IN1") == {"Morning": 3}
+    stages = {k for stage in seen["pipeline"] for k in stage}
+    assert stages == {"$match", "$group"}
 
 
 # --------------------------------------------------------------------------- #
