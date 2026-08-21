@@ -226,8 +226,30 @@ CLASS_CAM_LIVENESS=false         # see §6.3
 2. Capture ~10 minutes of full-resolution frames of a seated class whose students are
    already enrolled, plus a ground-truth attendance list taken manually.
 3. Run tiled detect → embed → `best_match_vec(scope=section, margin)` over the frames
-   and accumulate hits, as a script under `face-service/eval/` (mirroring
-   `benchmark.py` / `antispoof_bench.py`).
+   and accumulate hits. **The script exists: `face-service/eval/class_coverage.py`.**
+
+   ```bash
+   cd face-service
+   # dry-run the metrics with no camera and no model
+   .venv/bin/python -m eval.class_coverage --synthetic 30
+
+   # the real measurement
+   .venv/bin/python -m eval.class_coverage \
+       --frames ./class_frames --truth ./truth.csv \
+       --interval 4 --course CR003 --confirm-hits 3 --compare-tiling
+   ```
+
+   `truth.csv` is the manually-taken register, one student per line, with an
+   optional group for the placement breakdown:
+
+   ```
+   2301,front
+   2302,middle
+   2317,back
+   ```
+
+   It writes nothing and marks no attendance — it only reads frames and the
+   enrolled gallery, then prints the verdict below plus a JSON report.
 4. Report:
    - **Coverage** — % of actually-present students confirmed within the window
      (measured at 1, 3, 5, 10 minutes, so we learn how long the window must be).
