@@ -8,7 +8,10 @@ import { useToast } from '../components/Layout'
 import { getSession } from '../auth'
 
 // Confirmation dialog for changing a student's attendance status.
-const STATUS_LABEL = { present: 'Present', late: 'Late', absent: 'Absent', none: 'Not marked' }
+const STATUS_LABEL = { present: 'Present', late: 'Late', absent: 'Absent',
+                       excused: 'Excused', none: 'Not marked' }
+// 'excused' is intentionally NOT offered here: it is granted by approving a leave
+// request, not set by hand, so the audit trail always points back to a request.
 const UI_TO_CODE = { present: 'P', late: 'L', absent: 'A' }
 
 function EditAttendanceModal({ row, date, defaultSession, onClose, onSaved, setToast }) {
@@ -105,6 +108,8 @@ function RosterRecords() {
     if (r.status === 'present') return <Badge bg="success">Present</Badge>
     if (r.status === 'late') return <Badge bg="warning" text="dark">Late</Badge>
     if (r.status === 'absent') return <Badge bg="danger">Absent</Badge>
+    // Approved leave — neutral, not red: it doesn't count against the student.
+    if (r.status === 'excused') return <Badge bg="info" text="dark">Excused</Badge>
     return <Badge bg="light" text="dark">Not yet</Badge>
   }
 

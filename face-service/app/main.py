@@ -46,7 +46,7 @@ from .schemas import (Health, Student, RecognizeResult, PoseAnalysis,
                       MarkRequest, MarkResult, AttendanceRecord, AttendanceSummary,
                       Institute, LoginRequest, AuthUser, ChatRequest, AttendanceSet,
                       DisputeCreate, DisputeResolve, PeriodsUpdate, PolicyState,
-                      PolicyUpsert)
+                      PolicyUpsert, LeaveCreate, LeaveResolve)
 
 WEB_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "web")
 
@@ -644,6 +644,49 @@ def put_attendance_periods(req: PeriodsUpdate, user: dict = Depends(current_user
     if err:
         raise HTTPException(400, err)
     return {"ok": True, "periods": cleaned}
+
+
+# ---- leave / excused absence -----------------------------------------------
+@app.post("/api/attendance/leave")
+def request_leave(req: LeaveCreate, user: dict = Depends(current_user)):
+    """A student requests leave for a date range. Creates a pending request only —
+    nothing in the attendance log changes until staff approve it."""
+    if user.get("type") != "student":
+        raise HTTPException(403, "Only a student can request their own leave")
+    leave, err = get_store().request_leave(
+        user, req.startDate, req.endDate, reason=req.reason, document=req.document)
+    if err == "bad_dates":
+        raise HTTPException(400, "Give a valid start and end date (YYYY-MM-DD), "
+                                 "with the end on or after the start.")
+    if err == "overlap":
+        raise HTTPException(409, "You already have a request covering those dates.")
+    if err == "forbidden":
+        raise HTTPException(403, "This login has no linked student profile")
+    return {"ok": True, "leave": leave}
+
+
+@app.get("/api/attendance/leave")
+def list_leave(state: Optional[str] = None, user: dict = Depends(current_user)):
+    """Leave requests visible to the caller: a student sees their own, staff/admin
+    the queue for their students. Pending first. Filter with ?state=pending."""
+    return get_store().list_leave(user, state=state)
+
+
+@app.post("/api/attendance/leave/{leave_id}/resolve")
+def resolve_leave(leave_id: str, req: LeaveResolve, user: dict = Depends(current_user)):
+    """Staff/admin decide a leave request. Approving reclassifies the student's
+    absences in that range to excused; rejecting changes nothing."""
+    require_staff(user)
+    leave, err = get_store().resolve_leave(user, leave_id, req.action, note=req.note)
+    if err == "unknown":
+        raise HTTPException(404, "Leave request not found")
+    if err == "forbidden":
+        raise HTTPException(403, "Not permitted to resolve this request")
+    if err == "closed":
+        raise HTTPException(409, "This request is already resolved")
+    if err == "bad_action":
+        raise HTTPException(400, "action must be 'approve' or 'reject'")
+    return {"ok": True, "leave": leave}
 
 
 # ---- attendance disputes ("I was present") ---------------------------------

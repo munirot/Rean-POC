@@ -88,6 +88,7 @@ class Store:
         self.disputes = db[settings.disputes_coll]
         self.periods = db[settings.periods_coll]
         self.policies = db[settings.policies_coll]
+        self.leave = db[settings.leave_coll]
         self._indexed = False
         # Cached gallery (embeddings joined to names). Rebuilt lazily and only when
         # enrollment changes, so live recognition doesn't re-scan Mongo every frame.
@@ -212,6 +213,12 @@ class Store:
             self.policies.create_index([("InId", ASCENDING), ("scope", ASCENDING),
                                         ("CrID", ASCENDING), ("SecID", ASCENDING)],
                                        unique=True)
+            # Leave: the staff queue reads by scope+state; approved_leave_for is a
+            # per-student date-range lookup on the attendance-editing path.
+            self.leave.create_index([("InId", ASCENDING), ("state", ASCENDING),
+                                     ("createdAt", DESCENDING)])
+            self.leave.create_index([("StuID", ASCENDING), ("state", ASCENDING),
+                                     ("startDate", ASCENDING), ("endDate", ASCENDING)])
             self._indexed = True
 
     # seed() kept as a no-op hook (real data comes from the migration, not from here)
@@ -264,8 +271,14 @@ class Store:
         present = sum(1 for r in recs if r.get("status") == "P")
         late = sum(1 for r in recs if r.get("status") == "L")
         absent = sum(1 for r in recs if r.get("status") == "A")
+        excused = sum(1 for r in recs if r.get("status") == "E")
+        # An approved absence must not count against the student, so excused rows
+        # leave the denominator entirely rather than sitting in it uncounted —
+        # otherwise granting leave would silently LOWER their attendance rate.
+        counted = total - excused
         return {"records": total, "present": present, "late": late, "absent": absent,
-                "rate": round(present / total * 100, 1) if total else 0.0}
+                "excused": excused,
+                "rate": round(present / counted * 100, 1) if counted else 0.0}
 
     # ======================================================================= #
     # Student-success aggregation (attendance + assignments)
@@ -276,6 +289,10 @@ class Store:
         """records: list of {status: P/L/A, date: 'YYYY-MM-DD'}.
         Present-rate counts 'P' (Late is tracked separately, not as present).
         Splits chronologically into prior/recent halves to detect a decline."""
+        # 'E' (excused) is deliberately absent from this filter: an approved
+        # absence is excluded from the rate denominator, not counted against the
+        # student. It is reported separately below.
+        excused = sum(1 for r in records if r.get("status") == "E")
         recs = [r for r in records if r.get("status") in ("P", "L", "A")]
         total = len(recs)
         present = sum(1 for r in recs if r.get("status") == "P")
@@ -294,6 +311,7 @@ class Store:
             prior_rate = _rate(ordered[:mid])
             recent_rate = _rate(ordered[mid:])
         return {"records": total, "present": present, "late": late, "absent": absent,
+                "excused": excused,
                 "rate": rate, "priorRate": prior_rate, "recentRate": recent_rate}
 
     @staticmethod
@@ -674,7 +692,7 @@ class Store:
             "SecID": s.get("CurSecID"), "AcYr": s.get("CurAcYr"),
             "StuID": sid, "StuNa": rec["name"], "SubID": sub_id, "SubNa": sub_na,
             "date": date, "dateAt": date_at, "session": session,
-            "status": status if status in ("P", "L", "A") else "P",
+            "status": status if status in ("P", "L", "A", "E") else "P",
             "source": source, "markedBy": None,
             "similarity": round(float(similarity), 4) if similarity is not None else None,
             "CrAt": now,
@@ -707,9 +725,15 @@ class Store:
             return None, "unknown"
         if scope and not self.can_view_student(scope, rec["raw"]):
             return None, "forbidden"
-        status = status if status in ("P", "L", "A") else "P"
+        status = status if status in ("P", "L", "A", "E") else "P"
         date = date or self._today()
         session = session or "Morning"
+        # Marking a student absent on a day already covered by approved leave
+        # records it as excused instead. This is what makes leave granted BEFORE
+        # the dates work: the approval has no rows to reclassify yet, so the
+        # excusing has to happen when the absence is finally entered.
+        if status == "A" and self.approved_leave_for(sid, date):
+            status = "E"
         now = datetime.now(timezone.utc)
         existing = self.attn.find_one({"StuID": sid, "date": date, "session": session})
         if existing:
@@ -803,7 +827,8 @@ class Store:
             out.append({
                 "sid": sid, "name": _full_name(s), "cls": cls_name,
                 "checkedIn": bool(r) and status in ("P", "L"),
-                "status": {"P": "present", "L": "late", "A": "absent"}.get(status, "none"),
+                "status": {"P": "present", "L": "late", "A": "absent",
+                           "E": "excused"}.get(status, "none"),
                 "session": (r.get("session") if r else session),
                 "source": r.get("source") if r else None,
                 "time": ts.isoformat() if isinstance(ts, datetime) else ts,
@@ -853,12 +878,17 @@ class Store:
             if _student_sid(s) in present_sids:
                 by_class[c]["present"] += 1
         marked = self.attn.count_documents({"date": date, **attn_scope})
+        # Students on approved leave are neither present nor truant — counting them
+        # as absent would make an approved absence look like a problem.
+        excused_sids = set(self.attn.distinct(
+            "StuID", {"date": date, "status": "E", **attn_scope}))
         return {
             "date": date,
             "total_students": total,
             "enrolled": self.enrolled_count(),
             "present": len(present_sids),
-            "absent": max(0, total - len(present_sids)),
+            "excused": len(excused_sids),
+            "absent": max(0, total - len(present_sids) - len(excused_sids)),
             "marked": marked,   # attendance rows recorded for the day (0 = none taken)
             "by_class": sorted(by_class.values(), key=lambda x: x["cls"]),
             "sessions": sorted(x for x in self.attn.distinct("session", {"date": date, **attn_scope}) if x),
@@ -1237,6 +1267,131 @@ class Store:
         if status is None:
             return None, "closed"
         return status, None
+
+    # -- leave / excused-absence requests ------------------------------------
+    # A student asks for an absence to be excused. Approval is the ONLY thing that
+    # touches the attendance log, and it only ever reclassifies 'A' -> 'E' — it
+    # never invents rows for days no attendance was taken, and never overwrites a
+    # day the student was actually marked present or late.
+    _DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+    @staticmethod
+    def _scope_leave_query(scope):
+        """Limit the leave collection to what a caller may see: a student their
+        own, staff their courses, admin the whole institute."""
+        if not scope:
+            return {}
+        f = {"InId": scope["InId"]}
+        if scope["type"] == "student":
+            f["StuID"] = scope["sid"]
+        elif scope["type"] == "staff" and scope.get("courses") is not None:
+            f["CrID"] = {"$in": sorted(scope["courses"])}
+        return f
+
+    @staticmethod
+    def _leave_public(d):
+        ts, rt = d.get("createdAt"), d.get("resolvedAt")
+        return {
+            "id": str(d.get("_id", "")), "sid": d.get("StuID"), "name": d.get("StuNa"),
+            "cls": d.get("cls"), "startDate": d.get("startDate"),
+            "endDate": d.get("endDate"), "reason": d.get("reason"),
+            "document": d.get("document"), "state": d.get("state"),
+            "resolution": d.get("resolution"), "resolvedBy": d.get("resolvedBy"),
+            "appliedRows": d.get("appliedRows", 0),
+            "createdAt": ts.isoformat() if isinstance(ts, datetime) else ts,
+            "resolvedAt": rt.isoformat() if isinstance(rt, datetime) else rt,
+        }
+
+    def request_leave(self, scope, start_date, end_date, reason=None, document=None):
+        """A student requests leave for a date range (inclusive). Returns
+        (public_leave, error) — error in {None,'forbidden','bad_dates','overlap'}."""
+        self.ensure_index()
+        if not scope or scope.get("type") != "student" or not scope.get("sid"):
+            return None, "forbidden"
+        start, end = (start_date or "").strip(), (end_date or "").strip()
+        if not self._DATE_RE.match(start) or not self._DATE_RE.match(end):
+            return None, "bad_dates"
+        if end < start:
+            return None, "bad_dates"
+        sid = scope["sid"]
+        # One live request per stretch of days: overlapping pending/approved
+        # requests would apply twice and confuse the queue.
+        for d in self.leave.find({"StuID": sid, "state": {"$in": ["pending", "approved"]}}):
+            if d.get("startDate", "") <= end and start <= d.get("endDate", ""):
+                return None, "overlap"
+        rec = self.get(sid)
+        if not rec:
+            return None, "forbidden"
+        s = rec["raw"]
+        now = datetime.now(timezone.utc)
+        doc = {"InId": s.get("InId"), "CrID": s.get("CurCrID"), "SecID": s.get("CurSecID"),
+               "StuID": sid, "StuNa": rec["name"], "cls": rec["cls"],
+               "startDate": start, "endDate": end,
+               "reason": ((reason or "").strip()[:1000]) or None,
+               "document": ((document or "").strip()[:300]) or None,
+               "state": "pending", "createdAt": now,
+               "resolution": None, "resolvedBy": None, "resolvedAt": None,
+               "appliedRows": 0}
+        res = self.leave.insert_one(doc)
+        doc["_id"] = res.inserted_id
+        return self._leave_public(doc), None
+
+    def list_leave(self, scope, state=None):
+        """Leave requests visible to the caller, pending first then newest."""
+        q = dict(self._scope_leave_query(scope))
+        if state:
+            q["state"] = state
+        items = [self._leave_public(d) for d in
+                 self.leave.find(q).sort("createdAt", DESCENDING).limit(500)]
+        items.sort(key=lambda x: x["state"] != "pending")
+        return items
+
+    def approved_leave_for(self, sid, date):
+        """The approved leave covering this student on this date, if any."""
+        return self.leave.find_one({"StuID": sid, "state": "approved",
+                                    "startDate": {"$lte": date},
+                                    "endDate": {"$gte": date}})
+
+    def resolve_leave(self, scope, leave_id, action, note=None):
+        """Staff approve/reject. Approving reclassifies the student's ABSENT rows in
+        the range to excused ('E'); present/late days are left exactly as they are,
+        because the student was demonstrably there. Returns (public, error)."""
+        self.ensure_index()
+        try:
+            oid = ObjectId(leave_id)
+        except Exception:
+            return None, "unknown"
+        d = self.leave.find_one({"_id": oid})
+        if not d:
+            return None, "unknown"
+        scoped = self._scope_leave_query(scope)
+        if d.get("InId") != scoped.get("InId"):
+            return None, "forbidden"
+        if isinstance(scoped.get("CrID"), dict):
+            if d.get("CrID") not in set(scoped["CrID"].get("$in", [])):
+                return None, "forbidden"
+        if d.get("state") != "pending":
+            return None, "closed"
+        if action not in ("approve", "reject"):
+            return None, "bad_action"
+        now = datetime.now(timezone.utc)
+        applied = 0
+        if action == "approve":
+            res = self.attn.update_many(
+                {"StuID": d["StuID"], "status": "A",
+                 "date": {"$gte": d["startDate"], "$lte": d["endDate"]}},
+                {"$set": {"status": "E", "excusedBy": str(oid), "updatedAt": now,
+                          "editedBy": scope.get("loginId")}})
+            applied = getattr(res, "modified_count", 0) or 0
+        state = "approved" if action == "approve" else "rejected"
+        note = ((note or "").strip()[:500]) or None
+        self.leave.update_one(
+            {"_id": oid},
+            {"$set": {"state": state, "resolvedBy": scope.get("loginId"),
+                      "resolvedAt": now, "resolution": note, "appliedRows": applied}})
+        d.update({"state": state, "resolvedBy": scope.get("loginId"),
+                  "resolvedAt": now, "resolution": note, "appliedRows": applied})
+        return self._leave_public(d), None
 
     # -- attendance disputes (student "I was present" challenges) ------------
     # A dispute is a review item, never a silent edit: raising one only logs the

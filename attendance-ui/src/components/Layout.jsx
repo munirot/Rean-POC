@@ -11,6 +11,7 @@ const ALL = [
   { to: '/attendance', label: 'Take Attendance', roles: ['admin', 'staff', 'student'] },
   { to: '/records', label: 'Attendance Records', roles: ['admin', 'staff', 'student'] },
   { to: '/disputes', label: 'Disputes', roles: ['admin', 'staff'] },
+  { to: '/leave', label: 'Leave requests', roles: ['admin', 'staff'] },
   { to: '/insights', label: 'Insights', roles: ['admin', 'staff'] },
   { to: '/chat', label: 'Ask AI', roles: ['admin', 'staff', 'student'] },
   { to: '/settings', label: 'Settings', roles: ['admin'] },

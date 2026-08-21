@@ -37,6 +37,9 @@ class Settings:
     periods_coll: str = _get("FACE_PERIODS_COLL", "attendance_periods")
     # Per-scope capture mode (institute / course / section), most specific wins.
     policies_coll: str = _get("FACE_POLICIES_COLL", "attendance_policies")
+    # Student leave / excused-absence requests. Approving one reclassifies the
+    # affected absences to 'E', which is excluded from the attendance rate.
+    leave_coll: str = _get("FACE_LEAVE_COLL", "leave_requests")
 
     # --- Capture window enforcement ----------------------------------------
     # OFF by default: an institute that has configured no periods behaves exactly

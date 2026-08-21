@@ -111,6 +111,15 @@ export const api = {
     body: JSON.stringify({ periods }),
   }),
 
+  // leave / excused absence
+  requestLeave: (body) => j('/api/attendance/leave', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+  }),
+  leave: (state) => j('/api/attendance/leave' + (state ? `?state=${state}` : '')),
+  resolveLeave: (id, body) => j(`/api/attendance/leave/${id}/resolve`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+  }),
+
   // attendance disputes ("I was present")
   raiseDispute: (body) => j('/api/attendance/disputes', {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),

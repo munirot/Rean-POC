@@ -210,6 +210,19 @@ class PolicyState(BaseModel):
     now: Optional[str] = None         # server's local time, so the UI can't drift
 
 
+class LeaveCreate(BaseModel):
+    """A student asking for an absence to be excused."""
+    startDate: str                    # YYYY-MM-DD, inclusive
+    endDate: str                      # YYYY-MM-DD, inclusive
+    reason: Optional[str] = None
+    document: Optional[str] = None    # reference/name of supporting evidence
+
+
+class LeaveResolve(BaseModel):
+    action: str                       # "approve" | "reject"
+    note: Optional[str] = None
+
+
 class DisputeCreate(BaseModel):
     """A student challenging one of their own attendance rows ("I was present")."""
     recordId: str                     # the attendance row being disputed

@@ -1,10 +1,20 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Row, Col, Card, Badge, Table, Modal } from 'react-bootstrap'
+import { Row, Col, Card, Badge, Table, Modal, Form } from 'react-bootstrap'
 import PageHeader from '../components/PageHeader'
 import Button from '../components/Button'
 import { api } from '../api'
 import { getSession } from '../auth'
+
+// Attendance statuses as the student sees them. 'E' (excused) is deliberately
+// neutral, not red: an approved absence is not a mark against them, and it is
+// excluded from the attendance rate.
+const STATUS_STYLE = {
+  P: { label: 'Present', bg: 'success' },
+  L: { label: 'Late', bg: 'warning', text: 'dark' },
+  A: { label: 'Absent', bg: 'danger' },
+  E: { label: 'Excused', bg: 'info', text: 'dark' },
+}
 
 // How a raised dispute reads back to the student on the row it challenges.
 function DisputeBadge({ state }) {
@@ -40,12 +50,33 @@ export default function StudentDashboard() {
   const [disputes, setDisputes] = useState([])   // my disputes (for row status)
   const [disputing, setDisputing] = useState(null) // the row a modal is open for
   const [reason, setReason] = useState('')
+  const [leave, setLeave] = useState([])
+  const [leaveOpen, setLeaveOpen] = useState(false)
+  const [leaveForm, setLeaveForm] = useState({ startDate: '', endDate: '', reason: '', document: '' })
   const [busy, setBusy] = useState(false)
   const [toast, setToast] = useState('')
   const [err, setErr] = useState('')
   const nav = useNavigate()
 
   const loadDisputes = () => api.disputes().then(setDisputes).catch(() => {})
+  const loadLeave = () => api.leave().then(setLeave).catch(() => {})
+
+  async function submitLeave() {
+    setBusy(true)
+    try {
+      await api.requestLeave({
+        startDate: leaveForm.startDate, endDate: leaveForm.endDate || leaveForm.startDate,
+        reason: leaveForm.reason.trim() || undefined,
+        document: leaveForm.document.trim() || undefined,
+      })
+      setToast('Leave request sent — your teacher will review it.')
+      setLeaveOpen(false)
+      setLeaveForm({ startDate: '', endDate: '', reason: '', document: '' })
+      await Promise.all([loadLeave(), api.studentStats(sid).then(setStats).catch(() => {})])
+    } catch (e) {
+      setToast(e.message || 'Could not send the request.')
+    } finally { setBusy(false) }
+  }
 
   useEffect(() => {
     if (!sid) { setErr('This login has no linked student profile.'); return }
@@ -56,6 +87,7 @@ export default function StudentDashboard() {
     // first-person wording when the caller is a student (see /api/students/{sid}/plan).
     api.studentPlan(sid).then(setPlan).catch(() => {})
     loadDisputes()
+    loadLeave()
   }, [sid])
 
   useEffect(() => {
@@ -88,6 +120,7 @@ export default function StudentDashboard() {
   return (
     <>
       <PageHeader heading="My Dashboard" subHeading={`${data.name} · ${data.sid}`}>
+        <Button variant="secondary" icon="event_busy" onClick={() => setLeaveOpen(true)}>Request leave</Button>
         <Button variant="secondary" icon="forum" onClick={() => nav('/chat')}>Ask AI</Button>
         <Button variant="primary" icon="how_to_reg" onClick={() => nav('/attendance')}>Self check-in</Button>
       </PageHeader>
@@ -120,6 +153,12 @@ export default function StudentDashboard() {
         <Col md={6} xl={3}><Stat label="Late" value={stats ? stats.late : '—'} color="var(--warning)" /></Col>
         <Col md={6} xl={3}><Stat label="Absent" value={stats ? stats.absent : '—'} color="var(--danger)" /></Col>
       </Row>
+      {!!stats?.excused && (
+        <div className="text-secondary fs-2 mt-2">
+          {stats.excused} excused absence{stats.excused === 1 ? '' : 's'} — approved
+          leave, not counted against your attendance rate.
+        </div>
+      )}
 
       {/* My progress — at-risk transparency, spoken to the student in supportive
           language. Loads automatically; no "generate" step, unlike the staff view. */}
@@ -167,13 +206,16 @@ export default function StudentDashboard() {
                   <td className="fs-3 p-3">{r.session}</td>
                   <td className="fs-3 p-3">{r.subNa || '—'}</td>
                   <td className="fs-3 p-3">
-                    <Badge bg={r.status === 'P' ? 'success' : r.status === 'L' ? 'warning' : 'danger'} text={r.status === 'L' ? 'dark' : undefined}>
-                      {r.status === 'P' ? 'Present' : r.status === 'L' ? 'Late' : 'Absent'}
+                    <Badge bg={STATUS_STYLE[r.status]?.bg || 'danger'}
+                      text={STATUS_STYLE[r.status]?.text}>
+                      {STATUS_STYLE[r.status]?.label || 'Absent'}
                     </Badge>
                   </td>
                   <td className="fs-3 p-3"><Badge bg="light" text="dark">{r.source}</Badge></td>
                   <td className="fs-3 p-3 text-end">
-                    {r.status === 'P'
+                    {/* Nothing to dispute on a present day, or on an absence the
+                        student themselves asked to have excused. */}
+                    {r.status === 'P' || r.status === 'E'
                       ? <span className="text-secondary">—</span>
                       : byRecord[r.id]
                         ? <DisputeBadge state={byRecord[r.id].state} />
@@ -185,6 +227,78 @@ export default function StudentDashboard() {
           </Table>
         </Card.Body>
       </Card>
+
+      {leave.length > 0 && (
+        <Card className="mt-3">
+          <Card.Header className="fw-bold text-primary">My leave requests</Card.Header>
+          <Card.Body className="p-0">
+            <Table responsive className="camu-table mb-0">
+              <thead><tr><th>Dates</th><th>Reason</th><th>State</th></tr></thead>
+              <tbody>
+                {leave.map((l) => (
+                  <tr key={l.id} className="table-list_body">
+                    <td className="fs-3 p-3">
+                      {l.startDate === l.endDate ? l.startDate : <>{l.startDate} → {l.endDate}</>}
+                    </td>
+                    <td className="fs-3 p-3">{l.reason || <span className="text-secondary">—</span>}</td>
+                    <td className="fs-3 p-3">
+                      {l.state === 'approved'
+                        ? <Badge bg="success">Approved</Badge>
+                        : l.state === 'rejected'
+                          ? <Badge bg="secondary">Not approved</Badge>
+                          : <Badge bg="info" text="dark">Awaiting your teacher</Badge>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </Table>
+          </Card.Body>
+        </Card>
+      )}
+
+      {/* Leave request — creates a pending item for staff; nothing in the
+          attendance log changes unless they approve it. */}
+      <Modal show={leaveOpen} onHide={() => !busy && setLeaveOpen(false)} centered>
+        <Modal.Header closeButton><Modal.Title>Request leave</Modal.Title></Modal.Header>
+        <Modal.Body>
+          <p className="text-secondary fs-3">
+            Ask for an absence to be excused. If your teacher approves it, those days
+            stop counting against your attendance rate.
+          </p>
+          <Row className="g-2 mb-2">
+            <Col sm={6}>
+              <Form.Label className="fs-2 text-secondary fw-semibold mb-1">First day</Form.Label>
+              <Form.Control type="date" size="sm" value={leaveForm.startDate}
+                onChange={(e) => setLeaveForm({ ...leaveForm, startDate: e.target.value })} />
+            </Col>
+            <Col sm={6}>
+              <Form.Label className="fs-2 text-secondary fw-semibold mb-1">Last day</Form.Label>
+              <Form.Control type="date" size="sm" value={leaveForm.endDate}
+                min={leaveForm.startDate || undefined}
+                onChange={(e) => setLeaveForm({ ...leaveForm, endDate: e.target.value })} />
+              <div className="text-secondary fs-2 mt-1">Leave blank for a single day.</div>
+            </Col>
+          </Row>
+          <Form.Label className="fs-2 text-secondary fw-semibold mb-1">Reason</Form.Label>
+          <textarea className="form-control mb-2" rows={3} maxLength={1000}
+            placeholder="e.g. Medical appointment at the hospital."
+            value={leaveForm.reason}
+            onChange={(e) => setLeaveForm({ ...leaveForm, reason: e.target.value })} />
+          <Form.Label className="fs-2 text-secondary fw-semibold mb-1">
+            Supporting document (optional)
+          </Form.Label>
+          <Form.Control size="sm" maxLength={300} placeholder="e.g. Medical certificate 12/08"
+            value={leaveForm.document}
+            onChange={(e) => setLeaveForm({ ...leaveForm, document: e.target.value })} />
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={() => setLeaveOpen(false)} disabled={busy}>Cancel</Button>
+          <Button variant="primary" icon="send" onClick={submitLeave}
+            disabled={busy || !leaveForm.startDate}>
+            {busy ? 'Sending…' : 'Send request'}
+          </Button>
+        </Modal.Footer>
+      </Modal>
 
       {/* Dispute modal — logs an "I was present" review item; never edits the
           log directly. Staff approve/reject from their Disputes queue. */}
