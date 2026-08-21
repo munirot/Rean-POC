@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Row, Col, Card, Form, Badge, ButtonGroup, Table } from 'react-bootstrap'
+import { Row, Col, Card, Form, Badge, ButtonGroup, Table, Alert } from 'react-bootstrap'
 import PageHeader from '../components/PageHeader'
 import Button from '../components/Button'
 import FaceStage from '../components/FaceStage'
@@ -27,6 +27,14 @@ const CONFIRM_WINDOW_MS = 2500
 const RECOGNIZE_INTERVAL_MS = 350
 const CROP_MARGIN = 0.4
 
+// "08:20" + 10 -> "08:30". Used only to show when the late window shuts.
+function addMinutes(hhmm, mins) {
+  const [h, m] = String(hhmm || '').split(':').map(Number)
+  if (Number.isNaN(h) || Number.isNaN(m)) return hhmm
+  const t = (h * 60 + m + (Number(mins) || 0)) % 1440
+  return `${String(Math.floor(t / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`
+}
+
 export default function TakeAttendance() {
   const session0 = getSession()
   const isStudent = session0?.type === 'student'
@@ -40,6 +48,12 @@ export default function TakeAttendance() {
   const [autoMark, setAutoMark] = useState(true)
   const [marked, setMarked] = useState([])
   const [toast, setToast] = useToast()
+  // Capture policy for this class: which periods exist, which is live right now,
+  // and whether individual scanning is permitted at all. The server enforces all
+  // of this on POST /api/attendance — this is purely so the UI prompts honestly
+  // instead of letting someone scan into a rejection.
+  const [policy, setPolicy] = useState(null)
+  const pickedPeriod = useRef(false)
 
   // Manual source: roster to pick from.
   const [students, setStudents] = useState(null)
@@ -97,6 +111,29 @@ export default function TakeAttendance() {
   }, [])
   useEffect(() => { autoRef.current = autoMark }, [autoMark])
 
+  // Poll the capture policy: the window state changes with the clock (open ->
+  // grace -> closed), so a page left open must not keep claiming it's open.
+  useEffect(() => {
+    let alive = true
+    const tick = () => api.attendancePolicy(session)
+      .then((p) => alive && setPolicy(p))
+      .catch(() => { /* offline: leave the last known state */ })
+    tick()
+    const id = setInterval(tick, 30000)
+    return () => { alive = false; clearInterval(id) }
+  }, [session])
+
+  // Once periods are configured, snap the session to a real one — the free-text
+  // default ("Morning") may not match any configured period, and an unmatched
+  // label is refused server-side.
+  useEffect(() => {
+    if (pickedPeriod.current || !policy?.periods?.length) return
+    pickedPeriod.current = true
+    const names = policy.periods.map((p) => p.name)
+    if (names.includes(session)) return
+    setSession(policy.period?.name || names[0])
+  }, [policy, session])
+
   // Load the roster the first time manual marking is opened.
   useEffect(() => {
     if (source === 'manual' && students === null)
@@ -109,6 +146,29 @@ export default function TakeAttendance() {
     const hit = (s.name + ' ' + s.sid).toLowerCase().includes(q.toLowerCase())
     return hit && (!cls || s.cls === cls)
   }), [students, q, cls])
+
+  // --- what capture is permitted right now -------------------------------
+  const periods = policy?.periods || []
+  const enforce = !!policy?.enforceWindow
+  const winState = policy?.state                    // before|open|grace|closed
+  const individualAllowed = policy?.individualAllowed !== false
+  // No periods configured -> nothing to enforce (matches the server).
+  const windowOpen = !enforce || !periods.length || winState === 'open' || winState === 'grace'
+  // Automated capture (face scan / self check-in) obeys mode + window. Staff
+  // hand-marking is human correction and is exempt server-side, so the Manual
+  // tab stays usable even when the window has closed.
+  const faceAllowed = individualAllowed && windowOpen
+  const unknownSession = enforce && periods.length > 0 && !policy?.period
+
+  // If the window shuts while the camera is running, stop rather than let every
+  // scan bounce off a 409.
+  useEffect(() => {
+    if (cam.active && !faceAllowed) {
+      onStop()
+      setToast(individualAllowed ? 'Attendance closed for this period.'
+        : 'Individual check-in is turned off for this class.')
+    }
+  }, [faceAllowed])   // eslint-disable-line react-hooks/exhaustive-deps
 
   async function doMark(sid, { source: src = 'face', similarity } = {}) {
     if (markedSids.current.has(sid)) return
@@ -307,7 +367,21 @@ export default function TakeAttendance() {
                 </Col>}
                 <Col xs={5} sm={4}>
                   <Form.Label className="fs-2 text-secondary fw-semibold mb-1">Session</Form.Label>
-                  <Form.Control size="sm" value={session} onChange={(e) => setSession(e.target.value)} />
+                  {/* A picker once the admin has defined capture periods; free text
+                      otherwise, so an institute that hasn't configured any still works. */}
+                  {periods.length ? (
+                    <Form.Select size="sm" value={session}
+                      onChange={(e) => setSession(e.target.value)}>
+                      {periods.map((p) => (
+                        <option key={p.code} value={p.name}>
+                          {p.name} · {p.start}–{p.end}
+                        </option>
+                      ))}
+                    </Form.Select>
+                  ) : (
+                    <Form.Control size="sm" value={session}
+                      onChange={(e) => setSession(e.target.value)} />
+                  )}
                 </Col>
                 {source === 'face' && <>
                   <Col xs={7} sm={5}>
@@ -327,6 +401,11 @@ export default function TakeAttendance() {
                   </Col>
                 </>}
               </Row>
+
+              <CaptureBanner policy={policy} periods={periods} enforce={enforce}
+                winState={winState} individualAllowed={individualAllowed}
+                unknownSession={unknownSession} isStudent={isStudent}
+                session={session} />
 
               {source === 'face' ? <>
                 <FaceStage videoRef={cam.active ? cam.videoRef : null}
@@ -351,7 +430,8 @@ export default function TakeAttendance() {
 
                 <div className="d-flex flex-wrap gap-2 mt-3">
                   {!cam.active
-                    ? <Button variant="primary" icon="camera" onClick={onStart}>Start camera</Button>
+                    ? <Button variant="primary" icon="camera" disabled={!faceAllowed}
+                        onClick={onStart}>Start camera</Button>
                     : <>
                         <Button variant="secondary" icon="flip" onClick={cam.flip}>Flip</Button>
                         <Button variant="secondary" icon="stop" onClick={onStop}>Stop</Button>
@@ -393,6 +473,64 @@ export default function TakeAttendance() {
       </Row>
       {toast}
     </>
+  )
+}
+
+// Tells the user plainly what capture is possible right now, so nobody scans into
+// a rejection. Mirrors what the server enforces on POST /api/attendance; it never
+// decides anything on its own.
+function CaptureBanner({ policy, periods, enforce, winState, individualAllowed,
+                         unknownSession, isStudent, session }) {
+  if (!policy) return null
+  const p = policy.period
+  const askTeacher = isStudent
+    ? ' Ask your teacher to mark you.'
+    : ' You can still mark students from the Manual tab.'
+
+  if (!individualAllowed) {
+    return (
+      <Alert variant="warning" className="fs-3 py-2">
+        This class takes attendance by <strong>class camera</strong>; individual
+        check-in is turned off.{askTeacher}
+      </Alert>
+    )
+  }
+  if (!enforce || !periods.length) return null
+  if (unknownSession) {
+    return (
+      <Alert variant="warning" className="fs-3 py-2">
+        “{session}” isn’t one of the configured attendance periods, so marking
+        would be refused. Pick a period above.
+      </Alert>
+    )
+  }
+  if (winState === 'before') {
+    return (
+      <Alert variant="secondary" className="fs-3 py-2">
+        Attendance for <strong>{p.name}</strong> opens at <strong>{p.start}</strong>.
+      </Alert>
+    )
+  }
+  if (winState === 'open') {
+    return (
+      <Alert variant="success" className="fs-3 py-2">
+        <strong>{p.name}</strong> is open until <strong>{p.end}</strong> — marks count
+        as Present.
+      </Alert>
+    )
+  }
+  if (winState === 'grace') {
+    return (
+      <Alert variant="warning" className="fs-3 py-2">
+        Late window — marks count as <strong>Late</strong> until{' '}
+        <strong>{addMinutes(p.end, p.graceMinutes)}</strong>.
+      </Alert>
+    )
+  }
+  return (
+    <Alert variant="danger" className="fs-3 py-2">
+      Attendance is closed for <strong>{p?.name || session}</strong>.{askTeacher}
+    </Alert>
   )
 }
 
