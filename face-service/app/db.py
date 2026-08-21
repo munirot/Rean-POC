@@ -982,6 +982,78 @@ class Store:
             upsert=True)
         return cleaned, None
 
+    def audit_sessions(self, in_id):
+        """Read-only pre-rollout check (attendance-policy-plan §9): how the session
+        labels already in `attendance` line up with the configured periods.
+
+        Two distinct risks, which are easy to conflate:
+          * unmatched  — the label resolves to no period, so once enforcement is on
+                         an automated mark carrying it would be refused.
+          * variants   — the same label stored in several forms ("Morning",
+                         "morning "). match_period tolerates case/whitespace, so
+                         these still RESOLVE, but mark_attendance dedupes on the
+                         exact (StuID, date, session) triple and roster/list filters
+                         compare exactly — so variants split one session into
+                         several, allowing duplicate rows for the same sitting.
+        """
+        periods = self.get_periods(in_id)
+        counts = {}
+        for r in self.attn.find({"InId": in_id}, {"_id": 0, "session": 1}):
+            v = r.get("session")
+            counts[v] = counts.get(v, 0) + 1
+        by_canon = {}
+        for value in counts:
+            by_canon.setdefault((value or "").strip().lower(), []).append(value)
+        rows = []
+        for value, n in counts.items():
+            p = self.match_period(periods, value) if periods else None
+            rows.append({
+                "session": value, "count": n,
+                "matched": bool(p), "period": (p or {}).get("name"),
+                "variants": sorted(v for v in by_canon[(value or "").strip().lower()]
+                                   if v != value),
+            })
+        rows.sort(key=lambda r: (-r["count"], str(r["session"])))
+        return {
+            "periodsConfigured": len(periods),
+            "enforceWindow": settings.attendance_enforce_window,
+            "distinct": len(rows),
+            "records": sum(counts.values()),
+            "unmatchedRecords": sum(r["count"] for r in rows if periods and not r["matched"]),
+            "variantGroups": sum(1 for v in by_canon.values() if len(v) > 1),
+            "rows": rows,
+        }
+
+    def list_courses(self, in_id):
+        """Courses and their sections present in an institute, derived from student
+        records — the same CrID/SecID fields capture policies are keyed on, so the
+        admin can pick a scope instead of typing raw ids."""
+        agg = {}
+        for s in self.students.find(
+                {"InId": in_id, "StFl": {"$ne": "I"}},
+                {"_id": 0, "CurCrID": 1, "CurCrNm": 1, "CurCrCd": 1,
+                 "CurSecID": 1, "CurSecNm": 1}):
+            cr = s.get("CurCrID")
+            if not cr:
+                continue
+            e = agg.setdefault(cr, {
+                "CrID": cr,
+                "name": s.get("CurCrNm") or s.get("CurCrCd") or cr,
+                "code": s.get("CurCrCd"), "students": 0, "_secs": {}})
+            e["students"] += 1
+            sec = s.get("CurSecID")
+            if sec:
+                se = e["_secs"].setdefault(sec, {"SecID": sec,
+                                                 "name": s.get("CurSecNm") or sec,
+                                                 "students": 0})
+                se["students"] += 1
+        out = []
+        for e in agg.values():
+            secs = sorted(e.pop("_secs").values(), key=lambda x: str(x["SecID"]))
+            out.append({**e, "sections": secs})
+        out.sort(key=lambda x: str(x["name"]))
+        return out
+
     # -- capture mode policy (institute / course / section) -------------------
     MODES = ("individual", "class_camera", "both")
     SCOPES = ("institute", "course", "section")

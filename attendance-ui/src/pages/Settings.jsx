@@ -144,9 +144,90 @@ export default function Settings() {
       </div>
 
       <CapturePolicies setToast={setToast} />
+      <SessionAudit />
 
       {toast}
     </>
+  )
+}
+
+// Pre-rollout check. Turning window enforcement on against legacy data can start
+// refusing marks, so show the admin exactly how the session labels already in the
+// attendance log line up with the configured periods. Read-only.
+function SessionAudit() {
+  const [a, setA] = useState(null)
+  const [err, setErr] = useState('')
+
+  useEffect(() => {
+    api.adminSessionAudit().then(setA).catch((e) => setErr(e.message))
+  }, [])
+
+  if (err) return <Alert variant="danger" className="fs-3 mt-4">{err}</Alert>
+  if (!a) return null
+
+  const noPeriods = a.periodsConfigured === 0
+  const clean = !noPeriods && !a.unmatchedRecords && !a.variantGroups
+
+  return (
+    <Card className="mt-4">
+      <Card.Header className="fw-bold text-primary d-flex align-items-center gap-2">
+        Existing data check
+        {clean && <Badge bg="success">Ready</Badge>}
+        {!!a.unmatchedRecords && <Badge bg="danger">{a.unmatchedRecords} would be refused</Badge>}
+        {!!a.variantGroups && <Badge bg="warning" text="dark">{a.variantGroups} label variant(s)</Badge>}
+      </Card.Header>
+      <Card.Body>
+        <p className="fs-3 text-secondary">
+          {a.records.toLocaleString()} attendance record(s) across{' '}
+          {a.distinct} session label(s).
+        </p>
+
+        {noPeriods && (
+          <Alert variant="secondary" className="fs-3">
+            No periods configured yet — nothing is enforced, so nothing here can break.
+            Define periods above, then re-check before switching enforcement on.
+          </Alert>
+        )}
+        {!!a.unmatchedRecords && (
+          <Alert variant="danger" className="fs-3">
+            Some existing labels match no configured period. Once enforcement is on,
+            an automated mark carrying one of them is refused. Add a period whose
+            <strong> name</strong> matches, or rename the period to match the data.
+          </Alert>
+        )}
+        {!!a.variantGroups && (
+          <Alert variant="warning" className="fs-3">
+            The same label is stored in more than one form. These still resolve
+            (matching ignores case and spacing), but attendance de-duplicates on the
+            exact label — so one sitting can end up split across several rows.
+          </Alert>
+        )}
+
+        <Table responsive className="camu-table mb-0 align-middle">
+          <thead>
+            <tr><th>Session label</th><th>Records</th><th>Maps to</th><th>Also stored as</th></tr>
+          </thead>
+          <tbody>
+            {a.rows.map((r) => (
+              <tr key={String(r.session)} className="table-list_body">
+                <td className="fs-3 p-3"><code>{JSON.stringify(r.session)}</code></td>
+                <td className="fs-3 p-3">{r.count.toLocaleString()}</td>
+                <td className="fs-3 p-3">
+                  {noPeriods ? <span className="text-secondary">—</span>
+                    : r.matched ? <Badge bg="success">{r.period}</Badge>
+                      : <Badge bg="danger">no period</Badge>}
+                </td>
+                <td className="fs-3 p-3">
+                  {r.variants.length
+                    ? r.variants.map((v) => <code key={v} className="me-2">{JSON.stringify(v)}</code>)
+                    : <span className="text-secondary">—</span>}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </Table>
+      </Card.Body>
+    </Card>
   )
 }
 
@@ -163,6 +244,7 @@ const NEW_POLICY = { scope: 'institute', CrID: '', SecID: '', mode: 'individual'
 function CapturePolicies({ setToast }) {
   const [rows, setRows] = useState(null)
   const [camEnabled, setCamEnabled] = useState(false)
+  const [courses, setCourses] = useState([])
   const [draft, setDraft] = useState(NEW_POLICY)
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState(false)
@@ -171,6 +253,16 @@ function CapturePolicies({ setToast }) {
     .then((r) => { setRows(r.policies || []); setCamEnabled(!!r.classCameraEnabled) })
     .catch((e) => { setErr(e.message); setRows([]) })
   useEffect(() => { load() }, [])
+  useEffect(() => { api.adminCourses().then((r) => setCourses(r.courses || [])).catch(() => {}) }, [])
+
+  // Resolve ids to readable names so the table doesn't show bare CR001 / SC001.
+  const course = (id) => courses.find((c) => c.CrID === id)
+  const courseName = (id) => (id ? (course(id)?.name || id) : '—')
+  const sectionName = (crid, sid) => {
+    if (!sid) return '—'
+    return course(crid)?.sections?.find((s) => s.SecID === sid)?.name || sid
+  }
+  const draftSections = course(draft.CrID)?.sections || []
 
   async function save() {
     setErr(''); setBusy(true)
@@ -217,8 +309,8 @@ function CapturePolicies({ setToast }) {
             {rows.length ? rows.map((p) => (
               <tr key={p.id} className="table-list_body">
                 <td className="fs-3 p-3 text-capitalize">{p.scope}</td>
-                <td className="fs-3 p-3">{p.CrID || '—'}</td>
-                <td className="fs-3 p-3">{p.SecID || '—'}</td>
+                <td className="fs-3 p-3">{courseName(p.CrID)}</td>
+                <td className="fs-3 p-3">{sectionName(p.CrID, p.SecID)}</td>
                 <td className="fs-3 p-3">
                   <Badge bg={p.mode === 'individual' ? 'secondary' : 'primary'}>
                     {MODE_LABEL[p.mode] || p.mode}
@@ -254,16 +346,26 @@ function CapturePolicies({ setToast }) {
           </div>
           {draft.scope !== 'institute' && (
             <div>
-              <Form.Label className="fs-2 text-secondary fw-semibold mb-1">Course (CrID)</Form.Label>
-              <Form.Control size="sm" value={draft.CrID} placeholder="CR01"
-                onChange={(e) => setDraft({ ...draft, CrID: e.target.value })} />
+              <Form.Label className="fs-2 text-secondary fw-semibold mb-1">Course</Form.Label>
+              <Form.Select size="sm" value={draft.CrID}
+                onChange={(e) => setDraft({ ...draft, CrID: e.target.value, SecID: '' })}>
+                <option value="">Choose a course…</option>
+                {courses.map((c) => (
+                  <option key={c.CrID} value={c.CrID}>{c.name} ({c.students})</option>
+                ))}
+              </Form.Select>
             </div>
           )}
           {draft.scope === 'section' && (
             <div>
-              <Form.Label className="fs-2 text-secondary fw-semibold mb-1">Section (SecID)</Form.Label>
-              <Form.Control size="sm" value={draft.SecID} placeholder="SEC-A"
-                onChange={(e) => setDraft({ ...draft, SecID: e.target.value })} />
+              <Form.Label className="fs-2 text-secondary fw-semibold mb-1">Section</Form.Label>
+              <Form.Select size="sm" value={draft.SecID} disabled={!draft.CrID}
+                onChange={(e) => setDraft({ ...draft, SecID: e.target.value })}>
+                <option value="">{draft.CrID ? 'Choose a section…' : 'Pick a course first'}</option>
+                {draftSections.map((s) => (
+                  <option key={s.SecID} value={s.SecID}>{s.name} ({s.students})</option>
+                ))}
+              </Form.Select>
             </div>
           )}
           <div>

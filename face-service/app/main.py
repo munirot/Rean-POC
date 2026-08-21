@@ -577,6 +577,23 @@ def attendance_policy(session: Optional[str] = None, crId: Optional[str] = None,
                               cr_id=crId, sec_id=secId)
 
 
+@app.get("/api/admin/attendance-sessions")
+def audit_attendance_sessions(user: dict = Depends(current_user)):
+    """Pre-rollout audit: how session labels already in the attendance log line up
+    with the configured periods. Read-only — it changes nothing, it just tells an
+    admin what would break if window enforcement were switched on today."""
+    require_admin(user)
+    return get_store().audit_sessions(user.get("InId"))
+
+
+@app.get("/api/admin/courses")
+def list_admin_courses(user: dict = Depends(current_user)):
+    """Courses + sections in the institute, so policy scopes can be picked rather
+    than typed as raw CrID/SecID."""
+    require_admin(user)
+    return {"InId": user.get("InId"), "courses": get_store().list_courses(user.get("InId"))}
+
+
 @app.get("/api/admin/attendance-policies")
 def get_attendance_policies(user: dict = Depends(current_user)):
     """Capture-mode policies for the admin's institute, broadest scope first."""

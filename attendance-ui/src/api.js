@@ -98,6 +98,8 @@ export const api = {
   attendancePolicy: (session) =>
     j('/api/attendance/policy' + (session ? `?session=${encodeURIComponent(session)}` : '')),
   adminPeriods: () => j('/api/admin/attendance-periods'),
+  adminSessionAudit: () => j('/api/admin/attendance-sessions'),
+  adminCourses: () => j('/api/admin/courses'),
   adminPolicies: () => j('/api/admin/attendance-policies'),
   saveAdminPolicy: (body) => j('/api/admin/attendance-policies', {
     method: 'PUT', headers: { 'Content-Type': 'application/json' },
