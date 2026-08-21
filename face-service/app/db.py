@@ -87,6 +87,7 @@ class Store:
         self.chat_hist = db[settings.chat_history_coll]
         self.disputes = db[settings.disputes_coll]
         self.periods = db[settings.periods_coll]
+        self.policies = db[settings.policies_coll]
         self._indexed = False
         # Cached gallery (embeddings joined to names). Rebuilt lazily and only when
         # enrollment changes, so live recognition doesn't re-scan Mongo every frame.
@@ -206,6 +207,11 @@ class Store:
             self.disputes.create_index([("StuID", ASCENDING), ("createdAt", DESCENDING)])
             # One period-set document per institute.
             self.periods.create_index([("InId", ASCENDING)], unique=True)
+            # One policy per scope level; the unique key is what makes an upsert
+            # per (institute | course | section) safe.
+            self.policies.create_index([("InId", ASCENDING), ("scope", ASCENDING),
+                                        ("CrID", ASCENDING), ("SecID", ASCENDING)],
+                                       unique=True)
             self._indexed = True
 
     # seed() kept as a no-op hook (real data comes from the migration, not from here)
@@ -976,13 +982,132 @@ class Store:
             upsert=True)
         return cleaned, None
 
-    def policy_state(self, in_id, session=None, now=None):
-        """Capture state for the caller's institute, for the UI. Mode is fixed at
-        'individual' until Phase 3 introduces attendance_policies."""
+    # -- capture mode policy (institute / course / section) -------------------
+    MODES = ("individual", "class_camera", "both")
+    SCOPES = ("institute", "course", "section")
+
+    @staticmethod
+    def default_policy():
+        """Policy used when no row matches — mirrors pre-policy behaviour."""
+        return {"scope": "default", "CrID": None, "SecID": None,
+                "mode": settings.attendance_default_mode,
+                "allowIndividualFallback": True, "enforceWindow": None,
+                "inherited": True}
+
+    @staticmethod
+    def _policy_public(d):
+        return {"id": str(d.get("_id", "")), "scope": d.get("scope"),
+                "CrID": d.get("CrID"), "SecID": d.get("SecID"),
+                "mode": d.get("mode"),
+                "allowIndividualFallback": bool(d.get("allowIndividualFallback", True)),
+                "enforceWindow": d.get("enforceWindow"),
+                "updatedBy": d.get("updatedBy")}
+
+    @staticmethod
+    def validate_policy(scope, cr_id, sec_id, mode):
+        """Return (fields, error). Pure. Rejects class_camera while the capture
+        pipeline is unbuilt (CLASS_CAM_ENABLED) — otherwise an admin could point a
+        class at a source nothing feeds and silently stop its attendance."""
+        if scope not in Store.SCOPES:
+            return None, f"scope must be one of {', '.join(Store.SCOPES)}"
+        if mode not in Store.MODES:
+            return None, f"mode must be one of {', '.join(Store.MODES)}"
+        if mode in ("class_camera", "both") and not settings.class_cam_enabled:
+            return None, ("Whole-class camera capture is not enabled on this server "
+                          "(CLASS_CAM_ENABLED=false).")
+        cr_id = (cr_id or "").strip() or None
+        sec_id = (sec_id or "").strip() or None
+        if scope in ("course", "section") and not cr_id:
+            return None, f"a {scope} policy needs a course (CrID)"
+        if scope == "section" and not sec_id:
+            return None, "a section policy needs a section (SecID)"
+        if scope == "institute":
+            cr_id = sec_id = None
+        elif scope == "course":
+            sec_id = None
+        return {"scope": scope, "CrID": cr_id, "SecID": sec_id, "mode": mode}, None
+
+    def get_policies(self, in_id):
+        """Every policy row for an institute, broadest scope first."""
+        rows = [self._policy_public(d) for d in self.policies.find({"InId": in_id})]
+        order = {"institute": 0, "course": 1, "section": 2}
+        rows.sort(key=lambda r: (order.get(r["scope"], 9), r["CrID"] or "", r["SecID"] or ""))
+        return rows
+
+    def resolve_policy(self, in_id, cr_id=None, sec_id=None):
+        """Effective policy for a class: section > course > institute > default.
+        Most specific wins — the same precedence user_scope uses for InId/CrID."""
+        candidates = []
+        if cr_id and sec_id:
+            candidates.append({"InId": in_id, "scope": "section", "CrID": cr_id,
+                               "SecID": sec_id})
+        if cr_id:
+            candidates.append({"InId": in_id, "scope": "course", "CrID": cr_id,
+                               "SecID": None})
+        candidates.append({"InId": in_id, "scope": "institute", "CrID": None,
+                           "SecID": None})
+        for q in candidates:
+            d = self.policies.find_one(q)
+            if d:
+                p = self._policy_public(d)
+                p["inherited"] = False
+                return p
+        return self.default_policy()
+
+    def set_policy(self, in_id, scope, cr_id, sec_id, mode,
+                   allow_fallback=True, enforce_window=None, login_id=None):
+        """Upsert one scope's policy. Returns (policy, error)."""
+        fields, err = self.validate_policy(scope, cr_id, sec_id, mode)
+        if err:
+            return None, err
+        self.ensure_index()
+        key = {"InId": in_id, "scope": fields["scope"],
+               "CrID": fields["CrID"], "SecID": fields["SecID"]}
+        self.policies.update_one(
+            key,
+            {"$set": {"mode": fields["mode"],
+                      "allowIndividualFallback": bool(allow_fallback),
+                      "enforceWindow": enforce_window,
+                      "updatedBy": login_id,
+                      "updatedAt": datetime.now(timezone.utc)}},
+            upsert=True)
+        d = self.policies.find_one(key) or {**key, **fields}
+        return self._policy_public(d), None
+
+    def delete_policy(self, in_id, policy_id):
+        """Remove an override so the scope falls back to its parent."""
+        try:
+            oid = ObjectId(policy_id)
+        except Exception:
+            return False
+        return self.policies.delete_one({"_id": oid, "InId": in_id}).deleted_count > 0
+
+    @staticmethod
+    def individual_capture_allowed(policy):
+        """May a face scan / student self check-in mark under this policy?
+        class_camera classes only allow it as an explicit fallback, so a student
+        the camera misses can still resolve their own case."""
+        mode = (policy or {}).get("mode") or "individual"
+        if mode in ("individual", "both"):
+            return True
+        return bool((policy or {}).get("allowIndividualFallback", True))
+
+    def policy_state(self, in_id, session=None, now=None, cr_id=None, sec_id=None):
+        """Capture state for a class, for the UI: the effective mode plus which
+        window (if any) is live right now."""
         periods = self.get_periods(in_id)
         now = now or settings.now_local()
-        out = {"enforceWindow": settings.attendance_enforce_window,
-               "mode": "individual", "periods": periods,
+        policy = self.resolve_policy(in_id, cr_id, sec_id)
+        enforce = policy.get("enforceWindow")
+        if enforce is None:
+            enforce = settings.attendance_enforce_window
+        out = {"enforceWindow": bool(enforce),
+               "mode": policy.get("mode") or "individual",
+               "allowIndividualFallback": bool(policy.get("allowIndividualFallback", True)),
+               "individualAllowed": self.individual_capture_allowed(policy),
+               "policyScope": policy.get("scope"),
+               "classCameraEnabled": settings.class_cam_enabled,
+               "periods": periods,
                "period": None, "state": None, "markStatus": None,
                "now": now.isoformat()}
         period = self.match_period(periods, session) if session else None
@@ -1014,15 +1139,18 @@ class Store:
                 return p
         return None
 
-    def capture_status(self, in_id, session, now=None):
+    def capture_status(self, in_id, session, now=None, enforce=None):
         """Status an AUTOMATED mark (face scan / self check-in) should get right
         now, or an error when capture isn't allowed.
 
         Returns (status, error) — error in {None, 'closed', 'unknown_session'}.
         Returns ('P', None) when enforcement is off or the institute has no
         periods configured, so behaviour is unchanged until an admin opts in.
+        `enforce` lets a resolved policy override the server-wide default.
         """
-        if not settings.attendance_enforce_window:
+        if enforce is None:
+            enforce = settings.attendance_enforce_window
+        if not enforce:
             return "P", None
         periods = self.get_periods(in_id)
         if not periods:

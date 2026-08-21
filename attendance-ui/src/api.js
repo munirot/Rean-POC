@@ -98,6 +98,12 @@ export const api = {
   attendancePolicy: (session) =>
     j('/api/attendance/policy' + (session ? `?session=${encodeURIComponent(session)}` : '')),
   adminPeriods: () => j('/api/admin/attendance-periods'),
+  adminPolicies: () => j('/api/admin/attendance-policies'),
+  saveAdminPolicy: (body) => j('/api/admin/attendance-policies', {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  }),
+  deleteAdminPolicy: (id) => j(`/api/admin/attendance-policies/${id}`, { method: 'DELETE' }),
   saveAdminPeriods: (periods) => j('/api/admin/attendance-periods', {
     method: 'PUT', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ periods }),

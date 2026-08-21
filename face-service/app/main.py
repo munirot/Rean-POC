@@ -45,7 +45,8 @@ from .schemas import (Health, Student, RecognizeResult, PoseAnalysis,
                       EnrollMultiResult,
                       MarkRequest, MarkResult, AttendanceRecord, AttendanceSummary,
                       Institute, LoginRequest, AuthUser, ChatRequest, AttendanceSet,
-                      DisputeCreate, DisputeResolve, PeriodsUpdate, PolicyState)
+                      DisputeCreate, DisputeResolve, PeriodsUpdate, PolicyState,
+                      PolicyUpsert)
 
 WEB_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "web")
 
@@ -482,11 +483,27 @@ def mark_attendance(req: MarkRequest, user: dict = Depends(current_user)):
         raise HTTPException(404, f"Unknown student {req.sid}")
     if not store.can_view_student(user, rec["raw"]):
         raise HTTPException(403, "Not permitted to mark this student")
-    status, err = store.capture_status(rec["raw"].get("InId"), req.session)
-    if err == "unknown_session":
-        raise HTTPException(400, f"'{req.session}' is not a configured attendance period.")
-    if err == "closed":
-        raise HTTPException(409, "Attendance is closed for this period.")
+    raw = rec["raw"]
+    status = "P"
+    # Staff marking by hand from the roster is human correction, not automated
+    # capture, so neither the mode nor the window applies — same reasoning that
+    # leaves PUT /api/attendance ungated. A student cannot reach this branch by
+    # sending source="manual", because the role is checked too.
+    staff_manual = (user.get("type") in ("admin", "staff")
+                    and (req.source or "").lower() == "manual")
+    if not staff_manual:
+        policy = store.resolve_policy(raw.get("InId"), raw.get("CurCrID"),
+                                      raw.get("CurSecID"))
+        if not store.individual_capture_allowed(policy):
+            raise HTTPException(
+                409, "This class takes attendance by class camera; individual "
+                     "check-in is turned off. Ask your teacher to mark you.")
+        status, err = store.capture_status(
+            raw.get("InId"), req.session, enforce=policy.get("enforceWindow"))
+        if err == "unknown_session":
+            raise HTTPException(400, f"'{req.session}' is not a configured attendance period.")
+        if err == "closed":
+            raise HTTPException(409, "Attendance is closed for this period.")
     record, created = store.mark_attendance(
         req.sid, session=req.session, source=req.source or "kiosk",
         similarity=req.similarity, date=req.date, status=status)
@@ -541,12 +558,55 @@ def attendance_roster(date: Optional[str] = None, cls: Optional[str] = None,
 
 # ---- attendance policy: capture periods ------------------------------------
 @app.get("/api/attendance/policy", response_model=PolicyState)
-def attendance_policy(session: Optional[str] = None, user: dict = Depends(current_user)):
-    """Capture state for the caller's institute — which periods exist, which one
+def attendance_policy(session: Optional[str] = None, crId: Optional[str] = None,
+                      secId: Optional[str] = None, user: dict = Depends(current_user)):
+    """Capture state for a class — effective mode, which periods exist, which one
     applies, and whether marking is open right now. Any authenticated role: the
-    client uses it to prompt honestly, but the server still enforces the window
-    on POST /api/attendance (a client can't be trusted to gate itself)."""
-    return get_store().policy_state(user.get("InId"), session=session)
+    client uses it to prompt honestly, but the server still enforces mode and
+    window on POST /api/attendance (a client can't be trusted to gate itself).
+
+    A student caller defaults to their OWN class, so the app doesn't have to
+    disclose or guess course ids."""
+    store = get_store()
+    if user.get("type") == "student" and user.get("sid") and not crId:
+        rec = store.get(user["sid"])
+        if rec:
+            crId = rec["raw"].get("CurCrID")
+            secId = secId or rec["raw"].get("CurSecID")
+    return store.policy_state(user.get("InId"), session=session,
+                              cr_id=crId, sec_id=secId)
+
+
+@app.get("/api/admin/attendance-policies")
+def get_attendance_policies(user: dict = Depends(current_user)):
+    """Capture-mode policies for the admin's institute, broadest scope first."""
+    require_admin(user)
+    return {"InId": user.get("InId"),
+            "policies": get_store().get_policies(user.get("InId")),
+            "defaults": get_store().default_policy(),
+            "classCameraEnabled": settings.class_cam_enabled}
+
+
+@app.put("/api/admin/attendance-policies")
+def put_attendance_policy(req: PolicyUpsert, user: dict = Depends(current_user)):
+    """Set the capture mode for one scope (institute / course / section)."""
+    require_admin(user)
+    policy, err = get_store().set_policy(
+        user.get("InId"), req.scope, req.CrID, req.SecID, req.mode,
+        allow_fallback=req.allowIndividualFallback,
+        enforce_window=req.enforceWindow, login_id=user.get("loginId"))
+    if err:
+        raise HTTPException(400, err)
+    return {"ok": True, "policy": policy}
+
+
+@app.delete("/api/admin/attendance-policies/{policy_id}")
+def delete_attendance_policy(policy_id: str, user: dict = Depends(current_user)):
+    """Remove an override so the scope inherits from its parent again."""
+    require_admin(user)
+    if not get_store().delete_policy(user.get("InId"), policy_id):
+        raise HTTPException(404, "Policy not found")
+    return {"ok": True}
 
 
 @app.get("/api/admin/attendance-periods")

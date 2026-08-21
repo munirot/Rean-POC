@@ -143,7 +143,152 @@ export default function Settings() {
         refused — a teacher can still mark or correct attendance manually.
       </div>
 
+      <CapturePolicies setToast={setToast} />
+
       {toast}
     </>
+  )
+}
+
+// Capture mode per scope. Most specific wins: a section policy beats a course
+// policy, which beats the institute default. Removing a row makes that scope
+// inherit its parent again.
+const MODE_LABEL = {
+  individual: 'Individual scan',
+  class_camera: 'Whole-class camera',
+  both: 'Both',
+}
+const NEW_POLICY = { scope: 'institute', CrID: '', SecID: '', mode: 'individual', allowIndividualFallback: true }
+
+function CapturePolicies({ setToast }) {
+  const [rows, setRows] = useState(null)
+  const [camEnabled, setCamEnabled] = useState(false)
+  const [draft, setDraft] = useState(NEW_POLICY)
+  const [err, setErr] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  const load = () => api.adminPolicies()
+    .then((r) => { setRows(r.policies || []); setCamEnabled(!!r.classCameraEnabled) })
+    .catch((e) => { setErr(e.message); setRows([]) })
+  useEffect(() => { load() }, [])
+
+  async function save() {
+    setErr(''); setBusy(true)
+    try {
+      await api.saveAdminPolicy({
+        scope: draft.scope,
+        CrID: draft.scope === 'institute' ? null : draft.CrID.trim() || null,
+        SecID: draft.scope === 'section' ? draft.SecID.trim() || null : null,
+        mode: draft.mode,
+        allowIndividualFallback: draft.allowIndividualFallback,
+      })
+      setDraft(NEW_POLICY)
+      setToast('Capture mode saved')
+      await load()
+    } catch (e) { setErr(e.message) } finally { setBusy(false) }
+  }
+
+  async function remove(id) {
+    try { await api.deleteAdminPolicy(id); setToast('Override removed'); await load() }
+    catch (e) { setErr(e.message) }
+  }
+
+  if (rows === null) return null
+
+  return (
+    <Card className="mt-4">
+      <Card.Header className="fw-bold text-primary">Capture mode</Card.Header>
+      <Card.Body>
+        {!camEnabled && (
+          <Alert variant="secondary" className="fs-3 mb-3">
+            Whole-class camera capture is <strong>not enabled</strong> on this server
+            (<code>CLASS_CAM_ENABLED=false</code>), so only individual scan can be
+            selected. The capture pipeline for it isn't built yet.
+          </Alert>
+        )}
+        {err && <Alert variant="danger" className="fs-3">{err}</Alert>}
+
+        <Table responsive className="camu-table mb-3 align-middle">
+          <thead>
+            <tr><th>Scope</th><th>Course</th><th>Section</th><th>Mode</th>
+              <th>Individual fallback</th><th></th></tr>
+          </thead>
+          <tbody>
+            {rows.length ? rows.map((p) => (
+              <tr key={p.id} className="table-list_body">
+                <td className="fs-3 p-3 text-capitalize">{p.scope}</td>
+                <td className="fs-3 p-3">{p.CrID || '—'}</td>
+                <td className="fs-3 p-3">{p.SecID || '—'}</td>
+                <td className="fs-3 p-3">
+                  <Badge bg={p.mode === 'individual' ? 'secondary' : 'primary'}>
+                    {MODE_LABEL[p.mode] || p.mode}
+                  </Badge>
+                </td>
+                <td className="fs-3 p-3">
+                  {p.mode === 'class_camera'
+                    ? (p.allowIndividualFallback ? 'Allowed' : 'Off')
+                    : <span className="text-secondary">n/a</span>}
+                </td>
+                <td className="fs-3 p-3 text-end">
+                  <Button variant="secondary" icon="delete"
+                    onClick={() => remove(p.id)}>Remove</Button>
+                </td>
+              </tr>
+            )) : (
+              <tr><td colSpan="6" className="text-center text-secondary p-4">
+                No overrides — every class uses the default (individual scan).
+              </td></tr>
+            )}
+          </tbody>
+        </Table>
+
+        <div className="d-flex flex-wrap gap-2 align-items-end">
+          <div>
+            <Form.Label className="fs-2 text-secondary fw-semibold mb-1">Scope</Form.Label>
+            <Form.Select size="sm" value={draft.scope}
+              onChange={(e) => setDraft({ ...draft, scope: e.target.value })}>
+              <option value="institute">Institute</option>
+              <option value="course">Course</option>
+              <option value="section">Section</option>
+            </Form.Select>
+          </div>
+          {draft.scope !== 'institute' && (
+            <div>
+              <Form.Label className="fs-2 text-secondary fw-semibold mb-1">Course (CrID)</Form.Label>
+              <Form.Control size="sm" value={draft.CrID} placeholder="CR01"
+                onChange={(e) => setDraft({ ...draft, CrID: e.target.value })} />
+            </div>
+          )}
+          {draft.scope === 'section' && (
+            <div>
+              <Form.Label className="fs-2 text-secondary fw-semibold mb-1">Section (SecID)</Form.Label>
+              <Form.Control size="sm" value={draft.SecID} placeholder="SEC-A"
+                onChange={(e) => setDraft({ ...draft, SecID: e.target.value })} />
+            </div>
+          )}
+          <div>
+            <Form.Label className="fs-2 text-secondary fw-semibold mb-1">Mode</Form.Label>
+            <Form.Select size="sm" value={draft.mode}
+              onChange={(e) => setDraft({ ...draft, mode: e.target.value })}>
+              <option value="individual">Individual scan</option>
+              <option value="class_camera" disabled={!camEnabled}>Whole-class camera</option>
+              <option value="both" disabled={!camEnabled}>Both</option>
+            </Form.Select>
+          </div>
+          {draft.mode === 'class_camera' && (
+            <Form.Check type="switch" label="Allow individual fallback"
+              checked={draft.allowIndividualFallback}
+              onChange={(e) => setDraft({ ...draft, allowIndividualFallback: e.target.checked })} />
+          )}
+          <Button variant="primary" icon="add" disabled={busy} onClick={save}>
+            {busy ? 'Saving…' : 'Set mode'}
+          </Button>
+        </div>
+        <div className="text-secondary fs-2 mt-2">
+          Most specific wins: a section policy overrides its course, which overrides
+          the institute. Removing a row makes that scope inherit its parent again.
+        </div>
+      </Card.Body>
+    </Card>
   )
 }

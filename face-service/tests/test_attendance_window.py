@@ -30,6 +30,9 @@ def _at(hh, mm):
 def _store(periods, enforce=True):
     s = object.__new__(Store)                    # no Mongo
     s.get_periods = lambda in_id: periods
+    # Capture MODE is covered by test_attendance_policy; here every class just
+    # uses the default policy so these tests stay about the window alone.
+    s.resolve_policy = lambda *a, **k: Store.default_policy()
     settings.attendance_enforce_window = enforce
     return s
 

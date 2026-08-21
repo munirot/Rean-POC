@@ -35,6 +35,8 @@ class Settings:
     # so this is a collection rather than an env var — see
     # docs/attendance-policy-plan.md.
     periods_coll: str = _get("FACE_PERIODS_COLL", "attendance_periods")
+    # Per-scope capture mode (institute / course / section), most specific wins.
+    policies_coll: str = _get("FACE_POLICIES_COLL", "attendance_policies")
 
     # --- Capture window enforcement ----------------------------------------
     # OFF by default: an institute that has configured no periods behaves exactly
@@ -43,6 +45,14 @@ class Settings:
     # is confined to the configured period; staff corrections are never gated.
     attendance_enforce_window: bool = \
         _get("ATTENDANCE_ENFORCE_WINDOW", "false").lower() == "true"
+
+    # Capture mode used when no policy row matches a class.
+    attendance_default_mode: str = _get("ATTENDANCE_DEFAULT_MODE", "individual")
+    # Whole-class camera capture (docs/class-camera-attendance-plan.md) is not
+    # built yet — only the policy plumbing is. Until a capture pipeline exists,
+    # selecting the 'class_camera' mode is refused, so an admin cannot switch a
+    # class over to a source that nothing feeds and silently stop its attendance.
+    class_cam_enabled: bool = _get("CLASS_CAM_ENABLED", "false").lower() == "true"
 
     # --- Session tokens -----------------------------------------------------
     # HMAC key used to sign session tokens (see app/auth.py). SET THIS IN

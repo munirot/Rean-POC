@@ -184,11 +184,25 @@ class PeriodsUpdate(BaseModel):
     periods: List[Period]
 
 
+class PolicyUpsert(BaseModel):
+    """Admin setting the capture mode for one scope level."""
+    scope: str                             # "institute" | "course" | "section"
+    CrID: Optional[str] = None             # required for course/section
+    SecID: Optional[str] = None            # required for section
+    mode: str = "individual"               # "individual" | "class_camera" | "both"
+    allowIndividualFallback: bool = True
+    enforceWindow: Optional[bool] = None   # None = inherit the server default
+
+
 class PolicyState(BaseModel):
-    """What a client needs to render capture honestly: the configured periods and,
-    for a given session, whether marking is open right now and what it would earn."""
+    """What a client needs to render capture honestly: the effective mode, the
+    configured periods, and whether marking is open right now."""
     enforceWindow: bool
-    mode: str = "individual"          # widened in Phase 3 (attendance_policies)
+    mode: str = "individual"
+    allowIndividualFallback: bool = True
+    individualAllowed: bool = True    # may face scan / self check-in mark at all?
+    policyScope: Optional[str] = None  # which level the mode came from
+    classCameraEnabled: bool = False   # server build flag (CLASS_CAM_ENABLED)
     periods: List[Period] = []
     period: Optional[Period] = None
     state: Optional[str] = None       # "before" | "open" | "grace" | "closed"
