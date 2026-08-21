@@ -94,6 +94,15 @@ export const api = {
     return j('/api/attendance/roster' + (q ? `?${q}` : ''))
   },
 
+  // attendance policy / capture periods
+  attendancePolicy: (session) =>
+    j('/api/attendance/policy' + (session ? `?session=${encodeURIComponent(session)}` : '')),
+  adminPeriods: () => j('/api/admin/attendance-periods'),
+  saveAdminPeriods: (periods) => j('/api/admin/attendance-periods', {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ periods }),
+  }),
+
   // attendance disputes ("I was present")
   raiseDispute: (body) => j('/api/attendance/disputes', {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),

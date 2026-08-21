@@ -9,6 +9,7 @@ import TakeAttendance from './pages/TakeAttendance'
 import Records from './pages/Records'
 import Insights from './pages/Insights'
 import Disputes from './pages/Disputes'
+import Settings from './pages/Settings'
 import Chat from './pages/Chat'
 import SelectInstitution from './pages/SelectInstitution'
 import Login from './pages/Login'
@@ -42,6 +43,8 @@ ReactDOM.createRoot(document.getElementById('root')).render(
           <Route path="students/:sid" element={<RequireRole roles={['admin', 'staff']}><StudentDetail /></RequireRole>} />
           <Route path="insights" element={<RequireRole roles={['admin', 'staff']}><Insights /></RequireRole>} />
           <Route path="disputes" element={<RequireRole roles={['admin', 'staff']}><Disputes /></RequireRole>} />
+          {/* Institution configuration — admin only, not staff. */}
+          <Route path="settings" element={<RequireRole roles={['admin']}><Settings /></RequireRole>} />
           {/* Open to all authenticated roles (backend scopes the data to the caller).
               Chat scope injection limits a student to their own record (see chat.py). */}
           <Route path="chat" element={<Chat />} />

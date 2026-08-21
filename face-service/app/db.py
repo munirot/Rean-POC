@@ -898,10 +898,107 @@ class Store:
             return "L"
         return None
 
+    @staticmethod
+    def window_state(period, now_minutes):
+        """Where the clock sits relative to a window — richer than window_status
+        so the UI can say "opens at 08:00" instead of just refusing.
+        'before' | 'open' | 'grace' | 'closed'."""
+        start = Store._hhmm_to_minutes((period or {}).get("start"))
+        end = Store._hhmm_to_minutes((period or {}).get("end"))
+        if start is None or end is None or end < start:
+            return "closed"
+        try:
+            grace = max(0, int(period.get("graceMinutes") or 0))
+        except (ValueError, TypeError):
+            grace = 0
+        if now_minutes < start:
+            return "before"
+        if now_minutes <= end:
+            return "open"
+        if now_minutes <= end + grace:
+            return "grace"
+        return "closed"
+
+    @staticmethod
+    def validate_periods(periods):
+        """Return (cleaned, error). Pure, so the admin UI gets a precise message
+        instead of a generic 500 — and so bad windows can never reach the DB and
+        silently lock a campus out of taking attendance."""
+        if not isinstance(periods, list):
+            return None, "periods must be a list"
+        cleaned, seen = [], set()
+        for i, p in enumerate(periods):
+            if not isinstance(p, dict):
+                return None, f"period {i + 1} must be an object"
+            code = str(p.get("code") or "").strip()
+            name = str(p.get("name") or "").strip()
+            if not code:
+                return None, f"period {i + 1} needs a code"
+            if not name:
+                return None, f"period '{code}' needs a name"
+            if code.lower() in seen:
+                return None, f"duplicate period code '{code}'"
+            seen.add(code.lower())
+            start = Store._hhmm_to_minutes(p.get("start"))
+            end = Store._hhmm_to_minutes(p.get("end"))
+            if start is None:
+                return None, f"period '{code}' has an invalid start time (use HH:MM)"
+            if end is None:
+                return None, f"period '{code}' has an invalid end time (use HH:MM)"
+            if end < start:
+                return None, f"period '{code}' ends before it starts"
+            try:
+                grace = int(p.get("graceMinutes") or 0)
+            except (ValueError, TypeError):
+                return None, f"period '{code}' has an invalid grace value"
+            if grace < 0:
+                return None, f"period '{code}' cannot have negative grace"
+            cleaned.append({"code": code, "name": name,
+                            "start": str(p["start"]).strip(),
+                            "end": str(p["end"]).strip(), "graceMinutes": grace})
+        return cleaned, None
+
     def get_periods(self, in_id):
         """Configured capture windows for an institute ([] when none)."""
         doc = self.periods.find_one({"InId": in_id}, {"_id": 0}) or {}
         return doc.get("periods") or []
+
+    def set_periods(self, in_id, periods, login_id=None):
+        """Replace an institute's capture windows. Returns (cleaned, error)."""
+        cleaned, err = self.validate_periods(periods)
+        if err:
+            return None, err
+        self.ensure_index()
+        self.periods.update_one(
+            {"InId": in_id},
+            {"$set": {"periods": cleaned, "updatedBy": login_id,
+                      "updatedAt": datetime.now(timezone.utc)}},
+            upsert=True)
+        return cleaned, None
+
+    def policy_state(self, in_id, session=None, now=None):
+        """Capture state for the caller's institute, for the UI. Mode is fixed at
+        'individual' until Phase 3 introduces attendance_policies."""
+        periods = self.get_periods(in_id)
+        now = now or settings.now_local()
+        out = {"enforceWindow": settings.attendance_enforce_window,
+               "mode": "individual", "periods": periods,
+               "period": None, "state": None, "markStatus": None,
+               "now": now.isoformat()}
+        period = self.match_period(periods, session) if session else None
+        # With no session asked about, show the window that is currently live (if
+        # any) so the UI can surface "open until ..." without guessing a label.
+        if period is None and not session:
+            mins = now.hour * 60 + now.minute
+            period = next((p for p in periods
+                           if self.window_state(p, mins) in ("open", "grace")), None)
+        if period is None:
+            return out
+        mins = now.hour * 60 + now.minute
+        out["period"] = period
+        out["state"] = self.window_state(period, mins)
+        out["markStatus"] = self.window_status(period, mins)
+        return out
 
     @staticmethod
     def match_period(periods, session):

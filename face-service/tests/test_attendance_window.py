@@ -146,6 +146,70 @@ def test_staff_edit_path_has_no_window_logic():
 
 
 # --------------------------------------------------------------------------- #
+# admin period validation (Phase 2) — bad windows must never reach the DB
+# --------------------------------------------------------------------------- #
+def test_validate_accepts_and_normalises_a_good_period():
+    cleaned, err = Store.validate_periods([
+        {"code": " morning ", "name": " Morning ", "start": "08:00", "end": "08:20"}])
+    assert err is None
+    assert cleaned[0]["code"] == "morning" and cleaned[0]["name"] == "Morning"
+    assert cleaned[0]["graceMinutes"] == 0          # defaulted, not dropped
+
+
+def test_validate_rejects_bad_periods():
+    cases = [
+        ([{"code": "", "name": "x", "start": "08:00", "end": "08:20"}], "code"),
+        ([{"code": "A", "name": "", "start": "08:00", "end": "08:20"}], "name"),
+        ([{"code": "A", "name": "x", "start": "8am", "end": "08:20"}], "start"),
+        ([{"code": "A", "name": "x", "start": "08:00", "end": "oops"}], "end"),
+        ([{"code": "A", "name": "x", "start": "09:00", "end": "08:00"}], "before"),
+        ([{"code": "A", "name": "x", "start": "08:00", "end": "08:20",
+           "graceMinutes": -5}], "negative"),
+        ("not a list", "list"),
+    ]
+    for periods, needle in cases:
+        cleaned, err = Store.validate_periods(periods)
+        assert cleaned is None and err and needle in err.lower(), (periods, err)
+
+
+def test_validate_rejects_duplicate_codes():
+    cleaned, err = Store.validate_periods([
+        {"code": "AM", "name": "One", "start": "08:00", "end": "08:20"},
+        {"code": "am", "name": "Two", "start": "09:00", "end": "09:20"}])
+    assert cleaned is None and "duplicate" in err.lower()
+
+
+# --------------------------------------------------------------------------- #
+# window_state — what the UI renders (Phase 2)
+# --------------------------------------------------------------------------- #
+def test_window_state_transitions():
+    assert Store.window_state(MORNING, 8 * 60 - 1) == "before"
+    assert Store.window_state(MORNING, 8 * 60) == "open"
+    assert Store.window_state(MORNING, 8 * 60 + 20) == "open"
+    assert Store.window_state(MORNING, 8 * 60 + 21) == "grace"
+    assert Store.window_state(MORNING, 8 * 60 + 30) == "grace"
+    assert Store.window_state(MORNING, 8 * 60 + 31) == "closed"
+
+
+def test_window_state_of_a_broken_period_is_closed():
+    assert Store.window_state({"start": "x", "end": "y"}, 500) == "closed"
+
+
+def test_policy_state_reports_the_live_window_without_a_session():
+    s = _store([MORNING])
+    st = s.policy_state("IN1", now=_at(8, 25))
+    assert st["period"]["code"] == "MORNING"
+    assert st["state"] == "grace" and st["markStatus"] == "L"
+
+
+def test_policy_state_has_no_period_when_nothing_is_live():
+    s = _store([MORNING])
+    st = s.policy_state("IN1", now=_at(3, 0))
+    assert st["period"] is None and st["state"] is None
+    assert st["periods"] == [MORNING]        # still lists what's configured
+
+
+# --------------------------------------------------------------------------- #
 # the status actually reaches the attendance row
 # --------------------------------------------------------------------------- #
 class _Col:

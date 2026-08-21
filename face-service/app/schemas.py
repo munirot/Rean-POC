@@ -171,6 +171,31 @@ class AttendanceSet(BaseModel):
     session: Optional[str] = None     # defaults to "Morning"
 
 
+class Period(BaseModel):
+    """One named capture window, in the institute's local wall-clock time."""
+    code: str
+    name: str
+    start: str                        # "HH:MM"
+    end: str                          # "HH:MM"
+    graceMinutes: int = 0             # minutes after `end` that still count, as Late
+
+
+class PeriodsUpdate(BaseModel):
+    periods: List[Period]
+
+
+class PolicyState(BaseModel):
+    """What a client needs to render capture honestly: the configured periods and,
+    for a given session, whether marking is open right now and what it would earn."""
+    enforceWindow: bool
+    mode: str = "individual"          # widened in Phase 3 (attendance_policies)
+    periods: List[Period] = []
+    period: Optional[Period] = None
+    state: Optional[str] = None       # "before" | "open" | "grace" | "closed"
+    markStatus: Optional[str] = None  # "P" | "L" | None when capture is refused
+    now: Optional[str] = None         # server's local time, so the UI can't drift
+
+
 class DisputeCreate(BaseModel):
     """A student challenging one of their own attendance rows ("I was present")."""
     recordId: str                     # the attendance row being disputed

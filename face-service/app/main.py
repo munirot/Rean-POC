@@ -45,7 +45,7 @@ from .schemas import (Health, Student, RecognizeResult, PoseAnalysis,
                       EnrollMultiResult,
                       MarkRequest, MarkResult, AttendanceRecord, AttendanceSummary,
                       Institute, LoginRequest, AuthUser, ChatRequest, AttendanceSet,
-                      DisputeCreate, DisputeResolve)
+                      DisputeCreate, DisputeResolve, PeriodsUpdate, PolicyState)
 
 WEB_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "web")
 
@@ -150,6 +150,14 @@ def require_staff(user: dict) -> dict:
     """Guard for admin/staff-only actions (enrollment, marking, deletes)."""
     if user.get("type") not in ("admin", "staff"):
         raise HTTPException(403, "Staff or admin role required")
+    return user
+
+
+def require_admin(user: dict) -> dict:
+    """Guard for institution-configuration actions (periods, seeding, reset).
+    Stricter than require_staff — a teacher must not change campus-wide policy."""
+    if user.get("type") != "admin":
+        raise HTTPException(403, "Admin role required")
     return user
 
 
@@ -261,16 +269,14 @@ def clear_chat_history(conversationId: Optional[str] = None, user: dict = Depend
 
 @app.post("/api/students/seed")
 def seed(force: bool = False, user: dict = Depends(current_user)):
-    if user.get("type") != "admin":
-        raise HTTPException(403, "Admin role required")
+    require_admin(user)
     get_store().seed(force=force)
     return {"ok": True, "students": get_store().count()}
 
 
 @app.post("/api/students/reset")
 def reset(user: dict = Depends(current_user)):
-    if user.get("type") != "admin":
-        raise HTTPException(403, "Admin role required")
+    require_admin(user)
     get_store().clear_all_embeddings()
     return {"ok": True, "enrolled": get_store().enrolled_count()}
 
@@ -531,6 +537,36 @@ def attendance_summary(date: Optional[str] = None, user: dict = Depends(current_
 def attendance_roster(date: Optional[str] = None, cls: Optional[str] = None,
                       session: Optional[str] = None, user: dict = Depends(current_user)):
     return get_store().attendance_roster(date=date, cls=cls, session=session, scope=user)
+
+
+# ---- attendance policy: capture periods ------------------------------------
+@app.get("/api/attendance/policy", response_model=PolicyState)
+def attendance_policy(session: Optional[str] = None, user: dict = Depends(current_user)):
+    """Capture state for the caller's institute — which periods exist, which one
+    applies, and whether marking is open right now. Any authenticated role: the
+    client uses it to prompt honestly, but the server still enforces the window
+    on POST /api/attendance (a client can't be trusted to gate itself)."""
+    return get_store().policy_state(user.get("InId"), session=session)
+
+
+@app.get("/api/admin/attendance-periods")
+def get_attendance_periods(user: dict = Depends(current_user)):
+    """Capture windows configured for the admin's institute."""
+    require_admin(user)
+    return {"InId": user.get("InId"), "periods": get_store().get_periods(user.get("InId"))}
+
+
+@app.put("/api/admin/attendance-periods")
+def put_attendance_periods(req: PeriodsUpdate, user: dict = Depends(current_user)):
+    """Replace the institute's capture windows. Validated before it is stored —
+    a malformed window would otherwise lock the campus out of taking attendance."""
+    require_admin(user)
+    cleaned, err = get_store().set_periods(
+        user.get("InId"), [p.model_dump() for p in req.periods],
+        login_id=user.get("loginId"))
+    if err:
+        raise HTTPException(400, err)
+    return {"ok": True, "periods": cleaned}
 
 
 # ---- attendance disputes ("I was present") ---------------------------------
