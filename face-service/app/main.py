@@ -106,6 +106,7 @@ def health():
         status="ok", model_pack=settings.model_pack, device=settings.device,
         det_size=settings.det_size, match_threshold=settings.match_threshold,
         match_margin=settings.match_margin,
+        self_checkin_challenge=settings.self_checkin_challenge,
         students=(store.count() if mongo == "up" else 0),
         enrolled=(store.enrolled_count() if mongo == "up" else 0),
         mongo=mongo,
@@ -431,7 +432,9 @@ def _recognize_sync(data: bytes, threshold, source, user) -> RecognizeResult:
         recognized = id_ok and (live["live"] if live is not None else True)
         reason = m.get("reason")
         if live is not None and id_ok and not live["live"]:
-            reason = "spoof_suspected"   # matched a real student, but presented a photo
+            # Matched a real student but the liveness gate blocked it. Separate a
+            # genuine spoof signal from "we simply couldn't verify this frame".
+            reason = "spoof_suspected" if live.get("assessed", True) else "liveness_unknown"
         faces_out.append({
             "bbox": engine.bbox(face),
             "quality": engine.quality(face),
@@ -564,15 +567,21 @@ def _engine_or_503():
 def _liveness(img, face, threshold: float):
     """Score one face for liveness, honoring the enabled flag + fail-open/closed
     policy. Returns None when anti-spoofing is disabled (so callers skip the gate),
-    else {'live': bool, 'score': float}."""
+    else {'live': bool, 'score': float, 'assessed': bool}.
+
+    'assessed' is False when the scorer could not judge the face (empty crop at the
+    frame edge, or a model error). In that case 'live' reflects the fail-open/closed
+    policy, but callers should report it as "couldn't verify" — not as a spoof."""
     if not settings.antispoof_enabled:
         return None
     try:
         res = anti.get_antispoof().score(img, face)
-        return {"live": res["score"] >= threshold, "score": res["score"]}
     except Exception as e:  # model missing/broken at runtime → apply policy
         print(f"[antispoof] runtime error: {e}")
-        return {"live": not settings.antispoof_fail_closed, "score": 0.0}
+        return {"live": not settings.antispoof_fail_closed, "score": 0.0, "assessed": False}
+    if res.get("score") is None:            # scorer couldn't assess → policy + 'unknown'
+        return {"live": not settings.antispoof_fail_closed, "score": 0.0, "assessed": False}
+    return {"live": res["score"] >= threshold, "score": res["score"], "assessed": True}
 
 
 # ---- static frontend (mounted last so /api/* wins) -------------------------

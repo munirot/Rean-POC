@@ -57,10 +57,12 @@ class AntiSpoof:
         """Return {live, score, backend, cues} for one detected face."""
         crop = self._crop(img, face)
         if crop is None or crop.size == 0:
-            # Can't assess — treat per fail-closed policy at the call site by
-            # returning a neutral-low score; caller decides.
-            return {"live": False, "score": 0.0, "backend": self.backend,
-                    "cues": {"error": "empty_crop"}}
+            # Can't assess (face at the very edge → empty crop). Signal UNKNOWN
+            # (score None) rather than a low live-probability, so the caller applies
+            # its fail-open/closed policy AND can say "couldn't verify" instead of
+            # accusing a real person of presenting a spoof.
+            return {"live": None, "score": None, "backend": self.backend,
+                    "assessed": False, "cues": {"error": "empty_crop"}}
         if self.sess is not None:
             return self._score_onnx(crop)
         return self._score_classical(crop)
@@ -99,9 +101,9 @@ class AntiSpoof:
                     "score": round(p_live, 4), "backend": "onnx",
                     "cues": {"probs": [round(float(p), 4) for p in prob]}}
         except Exception as e:  # pragma: no cover
-            # Runtime inference error → let the caller apply fail-open/closed policy.
-            return {"live": not settings.antispoof_fail_closed, "score": 0.0,
-                    "backend": "onnx", "cues": {"error": str(e)}}
+            # Runtime inference error → UNKNOWN; the caller applies its policy.
+            return {"live": None, "score": None, "backend": "onnx",
+                    "assessed": False, "cues": {"error": str(e)}}
 
     @staticmethod
     def _softmax(v: np.ndarray) -> np.ndarray:

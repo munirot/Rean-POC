@@ -130,6 +130,11 @@ class Settings:
     # Fail-closed: if the anti-spoof model errors at runtime, treat as NOT live
     # (refuse, fall back to manual). Set "false" to fail-open (availability first).
     antispoof_fail_closed: bool = _get("ANTISPOOF_FAIL_CLOSED", "true").lower() == "true"
+    # Active challenge for UNSUPERVISED student self-check-in: after the face is
+    # recognized, require a live head-turn (center -> left/right, verified by the
+    # pose endpoint) before the self-mark counts. A flat photo/screen can't do it.
+    # Supervised staff kiosks stay passive. Surfaced via /api/health for the client.
+    self_checkin_challenge: bool = _get("SELF_CHECKIN_CHALLENGE", "true").lower() == "true"
 
     # --- Guided enrollment (motion-based liveness + multi-angle embeddings) --
     # Enrollment no longer accepts a single uploaded photo. The student is walked

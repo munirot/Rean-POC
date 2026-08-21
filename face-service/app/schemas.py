@@ -10,6 +10,7 @@ class Health(BaseModel):
     det_size: int
     match_threshold: float
     match_margin: float = 0.0
+    self_checkin_challenge: bool = False
     students: int
     enrolled: int
     mongo: str

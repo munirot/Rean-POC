@@ -3,6 +3,7 @@ import { Row, Col, Card, Form, Badge, ButtonGroup, Table } from 'react-bootstrap
 import PageHeader from '../components/PageHeader'
 import Button from '../components/Button'
 import FaceStage from '../components/FaceStage'
+import MatIcon from '../components/MatIcon'
 import { api } from '../api'
 import { fmtTime, todayStr } from '../utils/time'
 import { useCamera } from '../hooks/useCamera'
@@ -53,6 +54,13 @@ export default function TakeAttendance() {
   const runningRef = useRef(false)   // live-detection loop flag (avoids stale cam.active)
   const markedSids = useRef(new Set())
   const votesRef = useRef(new Map())   // sid -> recent hit timestamps (N-of-M gate)
+  // Active liveness challenge for unsupervised student self-check-in. challengeRef
+  // holds {dir, sawCenter} while a turn is being verified; challengeDoneRef marks
+  // it passed this session; challengeReq is whether the server requires it.
+  const challengeRef = useRef(null)
+  const challengeDoneRef = useRef(false)
+  const challengeReq = useRef(false)
+  const [challengeUI, setChallengeUI] = useState(null)   // {dir, text} while prompting
   const sessionRef = useRef(session)
   const threshRef = useRef(threshold)
   const threshTouched = useRef(false)   // has the operator overridden the server default?
@@ -63,6 +71,7 @@ export default function TakeAttendance() {
   useEffect(() => {
     sessionRef.current = session
     votesRef.current.clear()   // votes are per-session; don't carry across a switch
+    challengeRef.current = null; challengeDoneRef.current = false; setChallengeUI(null)
     api.roster({ date: todayStr(), session }).then((r) => {
       const present = (r.students || []).filter((x) => x.checkedIn)
       markedSids.current = new Set(present.map((x) => x.sid))
@@ -80,8 +89,11 @@ export default function TakeAttendance() {
       .then((h) => {
         if (!threshTouched.current && h?.match_threshold != null)
           setThreshold(h.match_threshold)
+        // Students self-checking in must pass a live head-turn unless the server
+        // disables it; staff kiosks (supervised) never challenge.
+        challengeReq.current = isStudent && h?.self_checkin_challenge !== false
       })
-      .catch(() => { /* offline: leave null so the server still decides */ })
+      .catch(() => { challengeReq.current = isStudent })   // offline: default on for students
   }, [])
   useEffect(() => { autoRef.current = autoMark }, [autoMark])
 
@@ -141,7 +153,15 @@ export default function TakeAttendance() {
         const hits = (votes.get(f.sid) || []).filter((t) => now - t < CONFIRM_WINDOW_MS)
         hits.push(now)
         votes.set(f.sid, hits)
-        if (hits.length >= CONFIRM_MIN_HITS) doMark(f.sid, { source: 'face', similarity: f.similarity })
+        if (hits.length >= CONFIRM_MIN_HITS) {
+          // Student self-check-in: once identity is confirmed, require a live
+          // head-turn before marking. Everyone else (staff kiosk) marks directly.
+          if (isStudent && challengeReq.current && !challengeDoneRef.current) {
+            if (!challengeRef.current) startChallenge()
+          } else {
+            doMark(f.sid, { source: 'face', similarity: f.similarity })
+          }
+        }
       }
       // Prune faces not seen recently so the vote map can't grow unbounded.
       for (const [sid, hits] of votes) {
@@ -174,9 +194,50 @@ export default function TakeAttendance() {
     return { x: x1, y: y1, w: x2 - x1, h: y2 - y1, videoW: vw, videoH: vh, full: false }
   }
 
+  // Begin the active challenge: pick a random turn direction and prompt for a
+  // neutral (center) frame first, so the pass requires a real center -> turn
+  // motion that a flat photo or screen can't reproduce.
+  function startChallenge() {
+    const dir = Math.random() < 0.5 ? 'left' : 'right'
+    challengeRef.current = { dir, sawCenter: false }
+    labelsRef.current = []           // clear recognition labels during the challenge
+    setChallengeUI({ dir, text: 'Look straight at the camera' })
+  }
+
+  // One challenge frame: ask the pose endpoint for head pose + liveness and drive
+  // the center -> turn state machine. On success, mark the student present.
+  async function challengeFrame() {
+    const blob = await cam.grabBlob(640)
+    if (!blob) return
+    const res = await api.analyzePose(blob)
+    const ch = challengeRef.current
+    if (!runningRef.current || !ch) return
+    if (!res.face_found) { setChallengeUI({ dir: ch.dir, text: 'Keep your face in the frame' }); return }
+    if (res.live === false) { setChallengeUI({ dir: ch.dir, text: 'Hold still — checking liveness' }); return }
+    if (!ch.sawCenter) {
+      if (res.pose === 'center') {
+        challengeRef.current = { ...ch, sawCenter: true }
+        setChallengeUI({ dir: ch.dir, text: `Now slowly turn your head ${ch.dir}` })
+      } else {
+        setChallengeUI({ dir: ch.dir, text: 'Look straight at the camera first' })
+      }
+      return
+    }
+    if (res.pose === ch.dir) {                 // the requested live turn happened
+      challengeRef.current = null
+      challengeDoneRef.current = true
+      setChallengeUI(null)
+      doMark(mySid, { source: 'face' })
+      setToast('Liveness confirmed — checked in ✓')
+    } else {
+      setChallengeUI({ dir: ch.dir, text: `Turn your head ${ch.dir}` })
+    }
+  }
+
   function startLive() {
     runningRef.current = true
     votesRef.current.clear()
+    challengeRef.current = null; challengeDoneRef.current = false; setChallengeUI(null)
     let last = 0
     // The box tracks the face locally (in-browser), so recognition only needs to
     // run often enough for fresh identity + prompt auto-marking, not for smoothness.
@@ -185,17 +246,21 @@ export default function TakeAttendance() {
       const v = cam.videoRef.current
       if (t - last > RECOGNIZE_INTERVAL_MS && !busy.current && v?.readyState >= 2 && v.videoWidth) {
         last = t
-        const region = recognitionRegion(v)
-        if (region === null) {
-          // No one in view — drop stale labels so a name doesn't linger over empty video.
-          if (labelsRef.current.length) labelsRef.current = []
-        } else {
-          busy.current = true
-          try {
-            const b = await cam.grabRegion(region, region.full ? 640 : 480)
-            if (b) await recognizeBlob(b, region)
-          } catch {} finally { busy.current = false }
-        }
+        busy.current = true
+        try {
+          if (challengeRef.current) {
+            await challengeFrame()          // verifying a live head-turn
+          } else {
+            const region = recognitionRegion(v)
+            if (region === null) {
+              // No one in view — drop stale labels so a name doesn't linger.
+              if (labelsRef.current.length) labelsRef.current = []
+            } else {
+              const b = await cam.grabRegion(region, region.full ? 640 : 480)
+              if (b) await recognizeBlob(b, region)
+            }
+          }
+        } catch {} finally { busy.current = false }
       }
       loopRef.current = requestAnimationFrame(step)
     }
@@ -208,7 +273,8 @@ export default function TakeAttendance() {
   }
   function onStop() {
     runningRef.current = false; cancelAnimationFrame(loopRef.current)
-    det.stop(); labelsRef.current = []; votesRef.current.clear(); cam.stop()
+    det.stop(); labelsRef.current = []; votesRef.current.clear()
+    challengeRef.current = null; setChallengeUI(null); cam.stop()
   }
   useEffect(() => () => { runningRef.current = false; cancelAnimationFrame(loopRef.current); det.stop() }, [])   // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -266,6 +332,13 @@ export default function TakeAttendance() {
                 <FaceStage videoRef={cam.active ? cam.videoRef : null}
                   boxesRef={det.boxesRef} labelsRef={labelsRef}
                   placeholder="Start the camera to recognize students and mark attendance automatically." />
+
+                {challengeUI && (
+                  <div className="alert alert-primary d-flex align-items-center gap-2 mt-2 mb-0 py-2">
+                    <MatIcon name={challengeUI.dir === 'left' ? 'arrow_back' : 'arrow_forward'} />
+                    <span className="fw-semibold">Liveness check: {challengeUI.text}</span>
+                  </div>
+                )}
 
                 {cam.active && (
                   <div className="fs-2 text-secondary mt-2">
