@@ -464,19 +464,32 @@ def mark_attendance(req: MarkRequest, user: dict = Depends(current_user)):
 
     Scope-checked like every other student-facing route: staff/admin may mark
     anyone they can see, and a student login may only mark itself — otherwise any
-    authenticated student could check in a friend by posting their sid."""
+    authenticated student could check in a friend by posting their sid.
+
+    Confined to the configured capture window when one is set up. This is the
+    path a student can call directly, so the window is enforced HERE rather than
+    in the client. Staff corrections go through PUT /api/attendance, which is
+    deliberately never window-gated (see docs/attendance-policy-plan.md)."""
     store = get_store()
     rec = store.get(req.sid)
     if not rec:
         raise HTTPException(404, f"Unknown student {req.sid}")
     if not store.can_view_student(user, rec["raw"]):
         raise HTTPException(403, "Not permitted to mark this student")
+    status, err = store.capture_status(rec["raw"].get("InId"), req.session)
+    if err == "unknown_session":
+        raise HTTPException(400, f"'{req.session}' is not a configured attendance period.")
+    if err == "closed":
+        raise HTTPException(409, "Attendance is closed for this period.")
     record, created = store.mark_attendance(
         req.sid, session=req.session, source=req.source or "kiosk",
-        similarity=req.similarity, date=req.date)
+        similarity=req.similarity, date=req.date, status=status)
     if record is None:
         raise HTTPException(404, f"Unknown student {req.sid}")
-    msg = "Marked present." if created else "Already marked for this session."
+    if not created:
+        msg = "Already marked for this session."
+    else:
+        msg = "Marked late." if status == "L" else "Marked present."
     return MarkResult(ok=True, created=created, record=record, message=msg)
 
 

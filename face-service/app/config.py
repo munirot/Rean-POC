@@ -31,6 +31,18 @@ class Settings:
     # Student-raised "I was present" challenges against attendance rows. Its own
     # collection so a dispute never mutates the attendance log until staff resolve it.
     disputes_coll: str = _get("FACE_DISPUTES_COLL", "attendance_disputes")
+    # Named capture windows ("Morning 08:00-08:20"). Admin-managed per institute,
+    # so this is a collection rather than an env var — see
+    # docs/attendance-policy-plan.md.
+    periods_coll: str = _get("FACE_PERIODS_COLL", "attendance_periods")
+
+    # --- Capture window enforcement ----------------------------------------
+    # OFF by default: an institute that has configured no periods behaves exactly
+    # as before, so enabling this can never strand a campus that hasn't set up
+    # windows yet. When on, automated marking (face scan / student self check-in)
+    # is confined to the configured period; staff corrections are never gated.
+    attendance_enforce_window: bool = \
+        _get("ATTENDANCE_ENFORCE_WINDOW", "false").lower() == "true"
 
     # --- Session tokens -----------------------------------------------------
     # HMAC key used to sign session tokens (see app/auth.py). SET THIS IN

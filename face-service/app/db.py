@@ -86,6 +86,7 @@ class Store:
         self.staffs = db[settings.staffs_coll]
         self.chat_hist = db[settings.chat_history_coll]
         self.disputes = db[settings.disputes_coll]
+        self.periods = db[settings.periods_coll]
         self._indexed = False
         # Cached gallery (embeddings joined to names). Rebuilt lazily and only when
         # enrollment changes, so live recognition doesn't re-scan Mongo every frame.
@@ -203,6 +204,8 @@ class Store:
             self.disputes.create_index([("InId", ASCENDING), ("state", ASCENDING),
                                         ("createdAt", DESCENDING)])
             self.disputes.create_index([("StuID", ASCENDING), ("createdAt", DESCENDING)])
+            # One period-set document per institute.
+            self.periods.create_index([("InId", ASCENDING)], unique=True)
             self._indexed = True
 
     # seed() kept as a no-op hook (real data comes from the migration, not from here)
@@ -637,9 +640,11 @@ class Store:
         s = self.subjects.find_one({"CrID": cr_id}, {"_id": 0, "SubID": 1, "SubNa": 1})
         return (s or {}).get("SubID"), (s or {}).get("SubNa")
 
-    def mark_attendance(self, sid, session, source="face", similarity=None, date=None):
-        """Insert a real attendance row (status 'P'). Idempotent per
-        (StuID, date, session). Returns (public_record, created)."""
+    def mark_attendance(self, sid, session, source="face", similarity=None, date=None,
+                        status="P"):
+        """Insert a real attendance row. Idempotent per (StuID, date, session).
+        `status` is normally 'P', or 'L' when the capture window has moved into
+        its grace period (see capture_status). Returns (public_record, created)."""
         self.ensure_index()
         rec = self.get(sid)
         if not rec:
@@ -662,7 +667,8 @@ class Store:
             "DeptID": s.get("CurDeptID"), "SemID": s.get("CurSemID"),
             "SecID": s.get("CurSecID"), "AcYr": s.get("CurAcYr"),
             "StuID": sid, "StuNa": rec["name"], "SubID": sub_id, "SubNa": sub_na,
-            "date": date, "dateAt": date_at, "session": session, "status": "P",
+            "date": date, "dateAt": date_at, "session": session,
+            "status": status if status in ("P", "L", "A") else "P",
             "source": source, "markedBy": None,
             "similarity": round(float(similarity), 4) if similarity is not None else None,
             "CrAt": now,
@@ -851,6 +857,89 @@ class Store:
             "by_class": sorted(by_class.values(), key=lambda x: x["cls"]),
             "sessions": sorted(x for x in self.attn.distinct("session", {"date": date, **attn_scope}) if x),
         }
+
+    # -- attendance periods / capture windows --------------------------------
+    # The clock arithmetic below is deliberately pure (minutes since local
+    # midnight) so it is unit-testable without Mongo or a frozen clock. Callers
+    # must derive "now" from settings.now_local() — the app's local timezone is
+    # UTC+7, so comparing a "08:00" window against a UTC clock would be off by
+    # seven hours and reject every genuine check-in.
+    @staticmethod
+    def _hhmm_to_minutes(text):
+        """'08:05' -> 485. Returns None for anything malformed."""
+        try:
+            hh, mm = str(text).split(":")
+            hh, mm = int(hh), int(mm)
+        except (ValueError, TypeError, AttributeError):
+            return None
+        if not (0 <= hh < 24 and 0 <= mm < 60):
+            return None
+        return hh * 60 + mm
+
+    @staticmethod
+    def window_status(period, now_minutes):
+        """Status a mark earns inside a capture window, or None when outside.
+
+        [start, end]            -> 'P'  (present)
+        (end, end + grace]      -> 'L'  (late)
+        anything else / invalid -> None (caller rejects the mark)
+        """
+        start = Store._hhmm_to_minutes((period or {}).get("start"))
+        end = Store._hhmm_to_minutes((period or {}).get("end"))
+        if start is None or end is None or end < start:
+            return None
+        try:
+            grace = max(0, int(period.get("graceMinutes") or 0))
+        except (ValueError, TypeError):
+            grace = 0
+        if start <= now_minutes <= end:
+            return "P"
+        if end < now_minutes <= end + grace:
+            return "L"
+        return None
+
+    def get_periods(self, in_id):
+        """Configured capture windows for an institute ([] when none)."""
+        doc = self.periods.find_one({"InId": in_id}, {"_id": 0}) or {}
+        return doc.get("periods") or []
+
+    @staticmethod
+    def match_period(periods, session):
+        """Find the period a session label refers to, by code or name
+        (case-insensitive). Names mirror the legacy free-text session strings so
+        existing attendance history keeps resolving."""
+        want = (session or "").strip().lower()
+        if not want:
+            return None
+        for p in periods:
+            if want in ((p.get("code") or "").strip().lower(),
+                        (p.get("name") or "").strip().lower()):
+                return p
+        return None
+
+    def capture_status(self, in_id, session, now=None):
+        """Status an AUTOMATED mark (face scan / self check-in) should get right
+        now, or an error when capture isn't allowed.
+
+        Returns (status, error) — error in {None, 'closed', 'unknown_session'}.
+        Returns ('P', None) when enforcement is off or the institute has no
+        periods configured, so behaviour is unchanged until an admin opts in.
+        """
+        if not settings.attendance_enforce_window:
+            return "P", None
+        periods = self.get_periods(in_id)
+        if not periods:
+            return "P", None            # nothing configured -> unchanged behaviour
+        period = self.match_period(periods, session)
+        if period is None:
+            # Periods ARE configured, so an unrecognised session label must not
+            # become a way to sidestep the window — students post their own marks.
+            return None, "unknown_session"
+        now = now or settings.now_local()
+        status = self.window_status(period, now.hour * 60 + now.minute)
+        if status is None:
+            return None, "closed"
+        return status, None
 
     # -- attendance disputes (student "I was present" challenges) ------------
     # A dispute is a review item, never a silent edit: raising one only logs the
