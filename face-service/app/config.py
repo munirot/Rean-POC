@@ -53,6 +53,10 @@ class Settings:
     # Student leave / excused-absence requests. Approving one reclassifies the
     # affected absences to 'E', which is excluded from the attendance rate.
     leave_coll: str = _get("FACE_LEAVE_COLL", "leave_requests")
+    # Whole-class camera: one doc per observed class sitting, plus one doc per
+    # (session, student) accumulating evidence across frames.
+    class_sessions_coll: str = _get("FACE_CLASS_SESSIONS_COLL", "class_sessions")
+    class_observations_coll: str = _get("FACE_CLASS_OBS_COLL", "class_observations")
 
     # --- Capture window enforcement ----------------------------------------
     # OFF by default: an institute that has configured no periods behaves exactly
@@ -69,6 +73,31 @@ class Settings:
     # selecting the 'class_camera' mode is refused, so an admin cannot switch a
     # class over to a source that nothing feeds and silently stop its attendance.
     class_cam_enabled: bool = _get("CLASS_CAM_ENABLED", "false").lower() == "true"
+    # Frames a student must be confidently recognized in before the camera may
+    # auto-mark them. The temporal equivalent of the kiosk's N-of-M vote gate.
+    class_cam_confirm_hits: int = int(_get("CLASS_CAM_CONFIRM_HITS", "3"))
+    class_cam_frame_interval: int = int(_get("CLASS_CAM_FRAME_INTERVAL", "4"))
+    # Tiled detection recovers small back-row faces a single whole-frame pass misses.
+    class_cam_tiles: str = _get("CLASS_CAM_TILES", "3x2")
+    class_cam_tile_overlap: float = float(_get("CLASS_CAM_TILE_OVERLAP", "0.15"))
+    # Per-face liveness is OFF for this source by design: the anti-spoof cues are
+    # noise on a 20-60px distant face, and a supervised classroom is the wrong
+    # threat model for it. See class-camera-attendance-plan.md §6.3.
+    class_cam_liveness: bool = _get("CLASS_CAM_LIVENESS", "false").lower() == "true"
+    # How long a room's camera token stays valid.
+    class_cam_device_ttl_days: float = float(_get("CLASS_CAM_DEVICE_TTL_DAYS", "365"))
+
+    def class_cam_tile_grid(self):
+        """(cols, rows) for tiled detection, or None when tiling is off."""
+        v = (self.class_cam_tiles or "").strip().lower()
+        if not v or v in ("off", "none", "0"):
+            return None
+        try:
+            c, r = v.split("x")
+            c, r = int(c), int(r)
+        except (ValueError, TypeError):
+            return None
+        return (c, r) if c >= 1 and r >= 1 else None
 
     # --- Session tokens -----------------------------------------------------
     # HMAC key used to sign session tokens (see app/auth.py). SET THIS IN

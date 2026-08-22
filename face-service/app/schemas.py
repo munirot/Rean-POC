@@ -210,6 +210,21 @@ class PolicyState(BaseModel):
     now: Optional[str] = None         # server's local time, so the UI can't drift
 
 
+class ClassSessionOpen(BaseModel):
+    """Staff opening a whole-class camera sitting."""
+    CrID: str
+    SecID: Optional[str] = None
+    date: Optional[str] = None        # YYYY-MM-DD, defaults to today
+    session: Optional[str] = None     # capture period name, defaults to "Morning"
+    camera: Optional[str] = None      # room/camera label, for the audit trail
+
+
+class ClassDeviceToken(BaseModel):
+    """Admin minting a camera token for one room."""
+    room: str
+    ttlDays: Optional[float] = None
+
+
 class LeaveCreate(BaseModel):
     """A student asking for an absence to be excused."""
     startDate: str                    # YYYY-MM-DD, inclusive

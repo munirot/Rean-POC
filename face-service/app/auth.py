@@ -48,6 +48,48 @@ def issue(login_id: str, user_type: str, now: float = None) -> str:
     return f"{_b64e(payload)}.{_sign(payload)}"
 
 
+def issue_device(room: str, in_id: str, ttl_days: float = 365.0,
+                 now: float = None) -> str:
+    """Mint a token for a room's camera.
+
+    Signed the same way as a session token but with typ="device", and it carries a
+    ROOM rather than a login id. A classroom device is physically reachable, so it
+    must not be able to act as a person: verify() will hand this to current_user as
+    type "device" with no matching `logins` document, and current_user rejects it.
+    The only thing it can do is POST frames to a session staff already opened.
+    """
+    exp = int((now if now is not None else time.time()) + ttl_days * 86400)
+    payload = json.dumps({"sub": room, "typ": "device", "inid": in_id, "exp": exp},
+                         separators=(",", ":"), sort_keys=True).encode()
+    return f"{_b64e(payload)}.{_sign(payload)}"
+
+
+def verify_device(token: str, now: float = None) -> dict:
+    """Return {room, InId, exp} for a valid DEVICE token, else None.
+
+    Rejects user session tokens outright, so a stolen staff token cannot be used to
+    push frames and a device token cannot be used to read anything."""
+    if not token or "." not in token:
+        return None
+    payload_b64, sig = token.rsplit(".", 1)
+    try:
+        payload = _b64d(payload_b64)
+    except Exception:
+        return None
+    if not hmac.compare_digest(_sign(payload), sig):
+        return None
+    try:
+        claims = json.loads(payload)
+        if claims.get("typ") != "device":
+            return None
+        room, in_id, exp = claims["sub"], claims["inid"], int(claims["exp"])
+    except (ValueError, TypeError, KeyError, UnicodeDecodeError):
+        return None
+    if (now if now is not None else time.time()) >= exp:
+        return None
+    return {"room": room, "InId": in_id, "exp": exp}
+
+
 def verify(token: str, now: float = None) -> dict:
     """Return {loginId, type, exp} for a valid token, else None.
 

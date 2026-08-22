@@ -89,6 +89,8 @@ class Store:
         self.periods = db[settings.periods_coll]
         self.policies = db[settings.policies_coll]
         self.leave = db[settings.leave_coll]
+        self.class_sessions = db[settings.class_sessions_coll]
+        self.class_obs = db[settings.class_observations_coll]
         self._indexed = False
         # Cached gallery (embeddings joined to names). Rebuilt lazily and only when
         # enrollment changes, so live recognition doesn't re-scan Mongo every frame.
@@ -219,6 +221,13 @@ class Store:
                                      ("createdAt", DESCENDING)])
             self.leave.create_index([("StuID", ASCENDING), ("state", ASCENDING),
                                      ("startDate", ASCENDING), ("endDate", ASCENDING)])
+            # One open sitting per class+period; observations are upserted per frame
+            # so the (session, student) key must be unique.
+            self.class_sessions.create_index([("InId", ASCENDING), ("state", ASCENDING),
+                                              ("startedAt", DESCENDING)])
+            self.class_obs.create_index([("sessionId", ASCENDING), ("StuID", ASCENDING)],
+                                        unique=True)
+            self.class_obs.create_index([("sessionId", ASCENDING), ("hits", DESCENDING)])
             self._indexed = True
 
     # seed() kept as a no-op hook (real data comes from the migration, not from here)
@@ -1277,6 +1286,175 @@ class Store:
         if status is None:
             return None, "closed"
         return status, None
+
+    # -- whole-class camera sessions -----------------------------------------
+    # A sitting is observed over many frames; evidence accumulates per student and
+    # only the confidently-seen are auto-marked. The camera can add "present" and
+    # nothing else — it never marks anyone absent, because a student can sit through
+    # a whole class without ever cleanly facing the lens (plan §2.1).
+    @staticmethod
+    def _class_session_public(d):
+        st, ct = d.get("startedAt"), d.get("closedAt")
+        return {"id": str(d.get("_id", "")), "InId": d.get("InId"),
+                "CrID": d.get("CrID"), "SecID": d.get("SecID"),
+                "date": d.get("date"), "session": d.get("session"),
+                "camera": d.get("camera"), "state": d.get("state"),
+                "frames": d.get("frames", 0), "startedBy": d.get("startedBy"),
+                "startedAt": st.isoformat() if isinstance(st, datetime) else st,
+                "closedAt": ct.isoformat() if isinstance(ct, datetime) else ct,
+                "stats": d.get("stats") or {}}
+
+    def open_class_session(self, scope, cr_id, sec_id, date=None, session=None,
+                           camera=None):
+        """Open (or re-attach to) a sitting for a class. Returns (public, error).
+
+        Re-opening is idempotent: a teacher tapping twice, or a device reconnecting,
+        must not create a second accumulator and split the evidence."""
+        self.ensure_index()
+        if not settings.class_cam_enabled:
+            return None, "disabled"
+        cr_id = (cr_id or "").strip() or None
+        if not cr_id:
+            return None, "bad_class"
+        if scope.get("type") == "staff" and scope.get("courses") is not None \
+                and cr_id not in scope["courses"]:
+            return None, "forbidden"
+        date = date or self._today()
+        session = session or "Morning"
+        key = {"InId": scope.get("InId"), "CrID": cr_id, "SecID": (sec_id or None),
+               "date": date, "session": session, "state": "open"}
+        existing = self.class_sessions.find_one(key)
+        if existing:
+            return self._class_session_public(existing), None
+        doc = {**key, "camera": (camera or "").strip() or None,
+               "startedBy": scope.get("loginId"),
+               "startedAt": datetime.now(timezone.utc), "closedAt": None,
+               "frames": 0, "stats": {}}
+        res = self.class_sessions.insert_one(doc)
+        doc["_id"] = res.inserted_id
+        return self._class_session_public(doc), None
+
+    def get_class_session(self, session_id):
+        try:
+            return self.class_sessions.find_one({"_id": ObjectId(session_id)})
+        except Exception:
+            return None
+
+    def record_frame(self, session_id, matches):
+        """Fold one frame's confident matches into the accumulator.
+
+        `matches`: [{sid, similarity, gap, thumb?}] — already threshold+margin
+        filtered by the caller. Each student counts ONCE per frame no matter how
+        many boxes matched them, so a duplicate detection can't confirm anyone on
+        its own. Upserts are per-student `$inc`s, so concurrent frames are safe."""
+        now = datetime.now(timezone.utc)
+        seen = {}
+        for m in matches:                      # collapse duplicates within the frame
+            sid = m.get("sid")
+            if not sid:
+                continue
+            prev = seen.get(sid)
+            if prev is None or (m.get("similarity") or 0) > (prev.get("similarity") or 0):
+                seen[sid] = m
+        for sid, m in seen.items():
+            sim = float(m.get("similarity") or 0.0)
+            gap = float(m.get("gap") or 0.0)
+            set_on_insert = {"firstSeen": now}
+            if m.get("thumb"):
+                set_on_insert = {**set_on_insert}
+            self.class_obs.update_one(
+                {"sessionId": str(session_id), "StuID": sid},
+                {"$inc": {"hits": 1},
+                 "$max": {"bestSim": sim, "bestGap": gap},
+                 "$set": {"lastSeen": now, **({"thumb": m["thumb"]} if m.get("thumb") else {})},
+                 "$setOnInsert": set_on_insert},
+                upsert=True)
+        self.class_sessions.update_one({"_id": ObjectId(session_id)},
+                                       {"$inc": {"frames": 1}})
+        return len(seen)
+
+    def list_observations(self, session_id):
+        return [{k: v for k, v in d.items() if k != "_id"}
+                for d in self.class_obs.find({"sessionId": str(session_id)})]
+
+    @staticmethod
+    def bucket_observations(roster, observations, confirm_hits):
+        """Split a roster into the three buckets from plan §2.1. Pure.
+
+        confirmed  — enough distinct frames to auto-mark
+        ambiguous  — seen, but not enough times to be trusted alone
+        notDetected— never recognized; the camera says NOTHING about these, so they
+                     are for the teacher to resolve, not to be marked absent.
+        """
+        by_sid = {o.get("StuID"): o for o in observations}
+        confirmed, ambiguous, not_detected = [], [], []
+        for s in roster:
+            sid = s.get("sid")
+            o = by_sid.get(sid)
+            row = {"sid": sid, "name": s.get("name"), "cls": s.get("cls"),
+                   "hits": (o or {}).get("hits", 0),
+                   "bestSim": (o or {}).get("bestSim"),
+                   "thumb": (o or {}).get("thumb")}
+            if o and row["hits"] >= confirm_hits:
+                confirmed.append(row)
+            elif o and row["hits"] > 0:
+                ambiguous.append(row)
+            else:
+                not_detected.append(row)
+        confirmed.sort(key=lambda r: -r["hits"])
+        ambiguous.sort(key=lambda r: -r["hits"])
+        not_detected.sort(key=lambda r: str(r["sid"]))
+        return {"confirmed": confirmed, "ambiguous": ambiguous,
+                "notDetected": not_detected}
+
+    def class_session_view(self, scope, session_id, confirm_hits=None):
+        """Live buckets for the review screen. Returns (view, error)."""
+        d = self.get_class_session(session_id)
+        if not d:
+            return None, "unknown"
+        if d.get("InId") != scope.get("InId"):
+            return None, "forbidden"
+        if scope.get("type") == "staff" and scope.get("courses") is not None \
+                and d.get("CrID") not in scope["courses"]:
+            return None, "forbidden"
+        hits = confirm_hits or settings.class_cam_confirm_hits
+        roster = [s for s in self.list_students(scope=scope)
+                  if self._student_course(s.get("sid")) == d.get("CrID")]
+        buckets = self.bucket_observations(roster, self.list_observations(session_id), hits)
+        return {"session": self._class_session_public(d), "confirmHits": hits,
+                **buckets}, None
+
+    def _student_course(self, sid):
+        s = self.students.find_one({"StuID": sid}, {"_id": 0, "CurCrID": 1}) or {}
+        return s.get("CurCrID")
+
+    def close_class_session(self, scope, session_id, confirm_hits=None):
+        """Finalize: auto-mark the confirmed students present, leave everyone else
+        for the teacher. Marking reuses mark_attendance, so it is idempotent and a
+        student already marked by any other route is untouched."""
+        view, err = self.class_session_view(scope, session_id, confirm_hits)
+        if err:
+            return None, err
+        d = self.get_class_session(session_id)
+        if d.get("state") != "open":
+            return None, "closed"
+        marked = 0
+        for row in view["confirmed"]:
+            rec, created = self.mark_attendance(
+                row["sid"], d.get("session"), source="class_camera",
+                similarity=row.get("bestSim"), date=d.get("date"))
+            if created:
+                marked += 1
+        stats = {"confirmed": len(view["confirmed"]),
+                 "ambiguous": len(view["ambiguous"]),
+                 "notDetected": len(view["notDetected"]), "marked": marked}
+        self.class_sessions.update_one(
+            {"_id": ObjectId(session_id)},
+            {"$set": {"state": "closed", "closedAt": datetime.now(timezone.utc),
+                      "closedBy": scope.get("loginId"), "stats": stats}})
+        view["session"]["state"] = "closed"
+        view["stats"] = stats
+        return view, None
 
     # -- leave / excused-absence requests ------------------------------------
     # A student asks for an absence to be excused. Approval is the ONLY thing that

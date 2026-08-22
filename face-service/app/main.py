@@ -46,7 +46,8 @@ from .schemas import (Health, Student, RecognizeResult, PoseAnalysis,
                       MarkRequest, MarkResult, AttendanceRecord, AttendanceSummary,
                       Institute, LoginRequest, AuthUser, ChatRequest, AttendanceSet,
                       DisputeCreate, DisputeResolve, PeriodsUpdate, PolicyState,
-                      PolicyUpsert, LeaveCreate, LeaveResolve)
+                      PolicyUpsert, LeaveCreate, LeaveResolve,
+                      ClassSessionOpen, ClassDeviceToken)
 
 WEB_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "web")
 
@@ -644,6 +645,133 @@ def put_attendance_periods(req: PeriodsUpdate, user: dict = Depends(current_user
     if err:
         raise HTTPException(400, err)
     return {"ok": True, "periods": cleaned}
+
+
+# ---- whole-class camera sessions -------------------------------------------
+def current_device(authorization: Optional[str] = Header(None)) -> dict:
+    """Authenticate a room camera. Deliberately separate from current_user: a
+    device token carries a room, not a login, so it can never read a roster, read
+    attendance, or mark anyone — it may only push frames into an open session."""
+    if not authorization:
+        raise HTTPException(401, "Missing Authorization header")
+    token = authorization.split(" ", 1)[1] if " " in authorization else authorization
+    claims = authmod.verify_device(token)
+    if not claims:
+        raise HTTPException(401, "Invalid or expired device token")
+    return claims
+
+
+@app.post("/api/admin/class-devices")
+def mint_class_device_token(req: ClassDeviceToken, user: dict = Depends(current_user)):
+    """Issue a camera token for one room. Admin only — this is a long-lived
+    credential for a physically accessible device, so it is shown once here and
+    never stored in a readable form."""
+    require_admin(user)
+    if not settings.class_cam_enabled:
+        raise HTTPException(409, "Whole-class camera capture is disabled "
+                                 "(CLASS_CAM_ENABLED=false)")
+    room = (req.room or "").strip()
+    if not room:
+        raise HTTPException(400, "room is required")
+    ttl = req.ttlDays or settings.class_cam_device_ttl_days
+    return {"ok": True, "room": room, "InId": user.get("InId"), "ttlDays": ttl,
+            "token": authmod.issue_device(room, user.get("InId"), ttl_days=ttl)}
+
+
+@app.post("/api/class-sessions")
+def open_class_session(req: ClassSessionOpen, user: dict = Depends(current_user)):
+    """Open a sitting for a class. Staff only; idempotent per class/date/period."""
+    require_staff(user)
+    sess, err = get_store().open_class_session(
+        user, req.CrID, req.SecID, date=req.date, session=req.session,
+        camera=req.camera)
+    if err == "disabled":
+        raise HTTPException(409, "Whole-class camera capture is disabled "
+                                 "(CLASS_CAM_ENABLED=false)")
+    if err == "bad_class":
+        raise HTTPException(400, "CrID is required")
+    if err == "forbidden":
+        raise HTTPException(403, "Not permitted to open a session for this course")
+    return {"ok": True, "session": sess}
+
+
+@app.post("/api/class-sessions/{session_id}/frame")
+async def ingest_class_frame(session_id: str, file: UploadFile = File(...),
+                             device: dict = Depends(current_device)):
+    """Ingest one classroom frame: tiled detect -> embed -> match against the
+    section roster -> accumulate. Returns counts only; the device learns nothing
+    about who is in the room."""
+    if not settings.class_cam_enabled:
+        raise HTTPException(409, "Whole-class camera capture is disabled")
+    data = await file.read()
+    return await run_in_threadpool(_ingest_frame_sync, session_id, data, device)
+
+
+def _ingest_frame_sync(session_id: str, data: bytes, device: dict):
+    store = get_store()
+    sess = store.get_class_session(session_id)
+    if not sess:
+        raise HTTPException(404, "Unknown class session")
+    # A device may only feed a session in its OWN institute, and only while open.
+    if sess.get("InId") != device.get("InId"):
+        raise HTTPException(403, "Device is not permitted on this session")
+    if sess.get("state") != "open":
+        raise HTTPException(409, "This class session is closed")
+
+    engine = _engine_or_503()
+    img = engine.decode(data)
+    # Scope the gallery to the section's course: recognition must never search
+    # students who cannot be in that room (plan §2.4).
+    scope = {"InId": sess.get("InId"), "type": "staff",
+             "courses": {sess.get("CrID")} if sess.get("CrID") else None}
+    mat, meta = store.gallery_matrix(scope=scope)
+    if mat.shape[0] == 0:
+        return {"ok": True, "faces": 0, "matched": 0,
+                "message": "No enrolled students in this class."}
+
+    faces = eng.detect_tiled(engine, img, settings.class_cam_tile_grid(),
+                             settings.class_cam_tile_overlap)
+    matches = []
+    for bbox, _score, face in faces:
+        m = eng.best_match_vec(engine.embedding(face), mat, meta,
+                               settings.match_threshold,
+                               margin=settings.match_margin)
+        # Per-face liveness is intentionally skipped for this source: the cues are
+        # noise on a small distant face and the room is supervised (plan §6.3).
+        if m.get("recognized") and m.get("sid"):
+            matches.append({"sid": m["sid"], "similarity": m.get("similarity"),
+                            "gap": m.get("gap")})
+    counted = store.record_frame(session_id, matches)
+    return {"ok": True, "faces": len(faces), "matched": len(matches),
+            "students": counted}
+
+
+@app.get("/api/class-sessions/{session_id}")
+def get_class_session(session_id: str, user: dict = Depends(current_user)):
+    """Live tallies and the three buckets, for the teacher review screen."""
+    require_staff(user)
+    view, err = get_store().class_session_view(user, session_id)
+    if err == "unknown":
+        raise HTTPException(404, "Unknown class session")
+    if err == "forbidden":
+        raise HTTPException(403, "Not permitted to view this session")
+    return view
+
+
+@app.post("/api/class-sessions/{session_id}/close")
+def close_class_session(session_id: str, user: dict = Depends(current_user)):
+    """Finalize a sitting: auto-mark the confirmed students present and return the
+    exception list. Students the camera never saw are NOT marked absent — that is
+    the teacher's call (plan §2.1)."""
+    require_staff(user)
+    view, err = get_store().close_class_session(user, session_id)
+    if err == "unknown":
+        raise HTTPException(404, "Unknown class session")
+    if err == "forbidden":
+        raise HTTPException(403, "Not permitted to close this session")
+    if err == "closed":
+        raise HTTPException(409, "This class session is already closed")
+    return view
 
 
 # ---- leave / excused absence -----------------------------------------------

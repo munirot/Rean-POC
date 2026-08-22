@@ -120,6 +120,75 @@ def get_engine() -> "FaceEngine":
     return _engine
 
 
+# -- tiled detection ---------------------------------------------------------
+# One wall camera puts back-row faces at 20-60px, where a single whole-frame SCRFD
+# pass at det_size misses them outright. Splitting the frame into overlapping tiles
+# and detecting per tile gives each face far more effective resolution, then the
+# duplicates that overlapping tiles inevitably produce are merged by IoU.
+def tile_rects(w, h, cols, rows, overlap):
+    """Overlapping tiles covering a frame. Overlap keeps a face straddling a seam
+    from being clipped in both neighbours and lost in both."""
+    cols, rows = max(1, cols), max(1, rows)
+    tw, th = w / cols, h / rows
+    ox, oy = tw * overlap, th * overlap
+    out = []
+    for r in range(rows):
+        for c in range(cols):
+            x1 = max(0, int(c * tw - ox))
+            y1 = max(0, int(r * th - oy))
+            x2 = min(w, int((c + 1) * tw + ox))
+            y2 = min(h, int((r + 1) * th + oy))
+            if x2 > x1 and y2 > y1:
+                out.append((x1, y1, x2, y2))
+    return out
+
+
+def iou(a, b):
+    """Intersection-over-union of two (x1,y1,x2,y2) boxes."""
+    ix1, iy1 = max(a[0], b[0]), max(a[1], b[1])
+    ix2, iy2 = min(a[2], b[2]), min(a[3], b[3])
+    iw, ih = max(0.0, ix2 - ix1), max(0.0, iy2 - iy1)
+    inter = iw * ih
+    if inter <= 0:
+        return 0.0
+    area_a = max(0.0, a[2] - a[0]) * max(0.0, a[3] - a[1])
+    area_b = max(0.0, b[2] - b[0]) * max(0.0, b[3] - b[1])
+    union = area_a + area_b - inter
+    return inter / union if union > 0 else 0.0
+
+
+def merge_detections(items, thresh=0.35):
+    """NMS over (bbox, score, payload) tuples, highest score first. The same face
+    found in two overlapping tiles must not be embedded — or counted — twice."""
+    kept = []
+    for it in sorted(items, key=lambda t: -t[1]):
+        if all(iou(it[0], k[0]) < thresh for k in kept):
+            kept.append(it)
+    return kept
+
+
+def detect_tiled(engine, img, tiles=None, overlap=0.15):
+    """Faces in one frame as [(bbox_xyxy, det_score, face)].
+
+    `tiles` as (cols, rows) detects per tile and merges; None runs the ordinary
+    single whole-frame pass, so callers can A/B the two without branching."""
+    h, w = img.shape[:2]
+    if not tiles:
+        return [(tuple(float(v) for v in f.bbox),
+                 float(getattr(f, "det_score", 0.0)), f)
+                for f in engine.detect(img)]
+    found = []
+    for (x1, y1, x2, y2) in tile_rects(w, h, tiles[0], tiles[1], overlap):
+        crop = img[y1:y2, x1:x2]
+        if crop.size == 0:
+            continue
+        for f in engine.detect(crop):
+            b = [float(v) for v in f.bbox]
+            found.append(((b[0] + x1, b[1] + y1, b[2] + x1, b[3] + y1),
+                          float(getattr(f, "det_score", 0.0)), f))
+    return merge_detections(found)
+
+
 # -- matching ----------------------------------------------------------------
 def cosine(a: np.ndarray, b: np.ndarray) -> float:
     """Cosine similarity of two L2-normalized vectors == dot product."""
