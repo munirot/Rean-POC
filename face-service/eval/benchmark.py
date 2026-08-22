@@ -19,7 +19,9 @@ Run (from the face-service/ directory, inside the venv):
 Notes:
 - Genuine score  = cosine(probe, template of the SAME person)
 - Impostor score = cosine(probe, template of a DIFFERENT person)
-- Lower threshold = stricter (fewer false accepts, more false rejects).
+- HIGHER threshold = stricter: fewer false accepts (FAR down), more false rejects
+  (FRR up). A match is accepted when cosine >= threshold, so lowering it lets more
+  through — at 0.20 a typical set accepts ~40% of impostors, at 0.40 about 0.2%.
 """
 import argparse
 import json
@@ -191,7 +193,11 @@ def find_eer(rows):
 
 
 def threshold_at_far(rows, far_target):
-    """Strictest-usable: lowest threshold whose FAR <= target (thresholds ascending)."""
+    """Best operating point: the LOWEST threshold whose FAR is still within budget.
+
+    Anything higher would reject more genuine students for no extra safety, so this
+    is the point that keeps false accepts inside `far_target` while losing the
+    fewest real matches."""
     ok = [r for r in rows if r["FAR"] <= far_target]
     return min(ok, key=lambda r: r["threshold"]) if ok else None
 

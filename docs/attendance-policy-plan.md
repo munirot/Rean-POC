@@ -7,7 +7,11 @@ way to say *"attendance may only be taken between 08:00 and 08:20"*. Today a stu
 can self-check-in at any hour of the day.
 **Goal:** Admin-managed policy that selects the capture **mode** per class and confines
 capture to a defined **period**, enforced server-side.
-**Status:** Draft for review · Date: 2026-08-21
+**Status:** **Built** (all four phases) · Drafted 2026-08-21, delivered 2026-08-22
+**Shipped as:** capture periods + window enforcement · admin Settings UI · per-scope
+capture mode with inheritance · period picker and live window state in Take Attendance.
+Enforcement is opt-in per deployment (`ATTENDANCE_ENFORCE_WINDOW`), and an institute
+with no periods configured behaves exactly as it did before.
 **Companion to:** `docs/class-camera-attendance-plan.md` (mode `class_camera` is defined there)
 
 ---

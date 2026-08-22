@@ -3,7 +3,15 @@
 **Project:** Rean / mycamu — `face-service` (FastAPI + InsightFace) + `attendance-ui`
 **Problem:** Attendance is taken one student at a time (kiosk scan or self check-in). A 30-student class is 30 interactions, and the queue is the bottleneck — not the recognition.
 **Goal:** A room camera observes the seated class and marks the students it confidently recognizes, leaving a short **teacher-confirmed exception list** for everyone else.
-**Status:** Draft for review · Date: 2026-08-21
+**Status:** **Phases 1-3 built, Phase 4 partly** · Drafted 2026-08-21, delivered 2026-08-22
+**Shipped as:** session + observation model, tiled detection, frame ingest with device
+tokens, teacher review screen, standalone capture client, multi-camera rooms and
+per-room calibration. Timetable-driven automation is deferred — see §4a.
+**Not yet proven:** Phase 0 (§8) has *not* been run. There is no classroom footage, so
+coverage in a real room is unmeasured. Building ahead of that gate is safe because the
+camera can only ever add "present" (§2.1) — an underperforming camera yields a longer
+exception list, never wrong attendance — but whether it is *worth using* is still open.
+Off by default (`CLASS_CAM_ENABLED=false`), and §10 privacy items must clear first.
 **Companion to:** `docs/face-attendance-plan.md`, `docs/face-antispoofing-plan.md`, `docs/face-matching-tuning.md`
 **Governed by:** `docs/attendance-policy-plan.md` — the admin decides *per section* whether a
 class uses individual scan or this whole-class scan, and confines capture to a defined period.
@@ -330,20 +338,41 @@ them early doubles as sales readiness.
 
 ---
 
-## 11. New/changed files (projected)
+## 11. New/changed files (as built)
 
 ```
-face-service/app/config.py         CLASS_CAM_* settings
-face-service/app/db.py             class_sessions + class_observations, accumulate/confirm
-face-service/app/engine.py         tiled detection (detect_tiled) + box merge/NMS
-face-service/app/main.py           4 new endpoints, device-token auth dependency
-face-service/app/schemas.py        session/observation/review models
-face-service/eval/class_coverage.py  Phase 0 measurement script
-face-service/tests/test_class_session.py  accumulation + confirmation + scoping tests
-attendance-ui/src/pages/ClassScan.jsx     teacher review screen
-attendance-ui/src/api.js           class-session helpers
-docs/class-camera-attendance-plan.md      this document
+face-service/app/config.py            CLASS_CAM_* settings + class_rooms collection
+face-service/app/auth.py              issue_device / verify_device — device tokens
+face-service/app/engine.py            tile_rects, iou, merge_detections, detect_tiled
+face-service/app/db.py                class_sessions, class_observations, class_rooms;
+                                      accumulate (hits + nearHits), bucket, close,
+                                      per-room calibration, confirmHits snapshot
+face-service/app/main.py              5 endpoints + current_device dependency,
+                                      room binding, per-room tiling
+face-service/app/schemas.py           ClassSessionOpen, ClassDeviceToken, RoomUpsert
+face-service/eval/class_coverage.py   Phase 0 measurement (imports engine's tiling)
+face-service/tests/test_class_session.py    accumulation, buckets, close, scoping,
+                                            room binding, calibration snapshot
+face-service/tests/test_capture_client.py   retry policy, stop-vs-retry, sourcing
+face-service/tests/test_class_coverage.py   Phase 0 metric math
+tools/class_camera.py                 standalone capture client (stdlib + OpenCV)
+attendance-ui/src/pages/ClassScan.jsx teacher review screen + camera health
+attendance-ui/src/pages/Settings.jsx  room calibration + camera token issuing
+attendance-ui/src/api.js              class-session / room / device helpers
 ```
+
+Two things landed that this plan did not anticipate:
+
+- **`nearHits`.** A face can clear the similarity threshold but lose to the ambiguity
+  margin when two classmates embed almost identically. Ingest originally discarded
+  those, so the student fell into *not detected* as if the camera had seen nobody —
+  and the Ambiguous bucket could never populate from its main source. Near-misses are
+  now tallied separately: they never count toward auto-marking, but they surface to
+  the teacher with the reason.
+- **Room binding.** §5.1 says the device token is scoped to `{InId, room}`, but the
+  first implementation checked only the institute — so a camera in one room could feed
+  another room's class. A sitting now names the rooms allowed to feed it, which is also
+  what multi-camera support *is*.
 
 ---
 

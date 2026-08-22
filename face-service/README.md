@@ -118,32 +118,105 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000
 
 ## API
 
-| Method | Path | Body | Returns |
-|---|---|---|---|
-| GET | `/api/health` | — | model/device/db status + counts |
-| GET | `/api/students` | — | roster with enrollment state + thumbnails |
-| POST | `/api/students/{sid}/enroll` | multipart `file` | detects largest face, stores 512-d embedding |
-| DELETE | `/api/students/{sid}/enroll` | — | removes the student's face profile |
-| POST | `/api/students/seed?force=true` | — | (re)seed sample roster |
-| POST | `/api/students/reset` | — | clear all embeddings |
-| POST | `/api/recognize` | multipart `file`, optional `threshold`, `source` | per-face `{bbox, name, similarity, accuracy, recognized, live, liveness_score}` |
+Interactive docs at **http://localhost:8000/docs**. Everything except `/api/health`,
+`/api/institutes` and `/api/auth/login` needs `Authorization: Bearer <token>`; the
+caller's role and course scope are recomputed from the live `logins` document on
+every request, so a token never asserts more than the login currently grants.
 
-Interactive docs at **http://localhost:8000/docs**.
+**Faces & recognition**
+
+| Method | Path | Purpose |
+|---|---|---|
+| POST | `/api/face/pose` | per-frame head pose + quality + liveness, for guided enrollment |
+| POST | `/api/students/{sid}/enroll` | multi-angle enrollment; every frame re-validated server-side |
+| DELETE | `/api/students/{sid}/enroll` | remove a face profile |
+| POST | `/api/recognize` | per-face `{bbox, name, similarity, gap, recognized, live, reason}` |
+
+**Attendance**
+
+| Method | Path | Purpose |
+|---|---|---|
+| POST/GET | `/api/attendance` | mark (face/kiosk/self) · list. Marking obeys the capture window |
+| PUT | `/api/attendance` | staff correction — deliberately never window-gated |
+| DELETE | `/api/attendance/{id}` | undo a record |
+| GET | `/api/attendance/summary`, `/roster` | dashboard counts · per-student roster for a date |
+| GET | `/api/attendance/policy` | effective capture mode + which period is live right now |
+
+**Student-initiated workflows**
+
+| Method | Path | Purpose |
+|---|---|---|
+| POST/GET | `/api/attendance/disputes` | student challenges a mark · scoped queue |
+| POST | `/api/attendance/disputes/{id}/resolve` | staff approve (corrects the row) / reject |
+| POST/GET | `/api/attendance/leave` | request excused absence · scoped queue |
+| POST | `/api/attendance/leave/{id}/resolve` | staff approve — reclassifies absences to `E` |
+
+**Whole-class camera** (off unless `CLASS_CAM_ENABLED=true`)
+
+| Method | Path | Auth | Purpose |
+|---|---|---|---|
+| POST | `/api/class-sessions` | staff | open a sitting for a class/period/room(s) |
+| POST | `/api/class-sessions/{id}/frame` | **device token** | ingest one frame → detect → match → accumulate |
+| GET | `/api/class-sessions/{id}` | staff | live buckets: confirmed / ambiguous / not detected |
+| POST | `/api/class-sessions/{id}/close` | staff | auto-mark the confirmed; return the exception list |
+
+**Insight & admin**
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/api/students`, `/{sid}/profile`, `/stats`, `/plan` | roster · profile · figures · improvement plan |
+| GET | `/api/analytics/cohort` | at-risk signals for a class |
+| POST/GET/DELETE | `/api/chat*` | grounded chat, scoped to the caller |
+| GET | `/api/courses` | the caller's own courses (staff) |
+| GET/PUT | `/api/admin/attendance-periods` | capture windows (admin) |
+| GET/PUT/DELETE | `/api/admin/attendance-policies` | capture mode per institute/course/section (admin) |
+| GET/PUT/DELETE | `/api/admin/class-rooms` | per-room camera calibration (admin) |
+| POST | `/api/admin/class-devices` | issue a room camera token (admin) |
+| GET | `/api/admin/attendance-sessions`, `/courses` | pre-rollout data audit · course list (admin) |
 
 Quick check with curl:
 ```bash
 curl -s localhost:8000/api/health | python3 -m json.tool
-curl -s -F file=@sophea.jpg localhost:8000/api/students/S-1001/enroll
-curl -s -F file=@classroom.jpg -F threshold=0.35 localhost:8000/api/recognize
+curl -s -H "Authorization: Bearer $TOKEN" localhost:8000/api/students
 ```
 
 ## Configuration (`.env`)
 
+`app/config.py` loads `face-service/.env` itself, and real environment variables win
+over the file — so `CLASS_CAM_ENABLED=true ./run-all.sh` overrides it for one run.
+Every setting has a default, so a missing `.env` is silent: check `/api/health` and
+the startup log to see what is actually in force.
+
+**Model & matching**
 - `MODEL_PACK` — `buffalo_l` (accurate, default) or `buffalo_s` (light/fast). Change and
   restart; re-enroll students since embeddings are model-specific (`embVer` tracks this).
-- `DEVICE` — `cpu` (default) or `gpu` (install `onnxruntime-gpu`, needs CUDA).
-- `MATCH_THRESHOLD` — cosine-similarity cutoff (0..1); lower = stricter. The UI slider
-  overrides this per request.
+- `DEVICE` — `cpu` (default), `gpu`/`cuda` (NVIDIA), or `coreml` on Apple Silicon.
+- `MATCH_THRESHOLD` — cosine cutoff (0..1). A face is accepted when similarity **>=**
+  this, so **higher = stricter**: raising it cuts false accepts and costs some real
+  matches. (At 0.20 a typical set accepts ~40% of impostors; at 0.40, ~0.2%.)
+- `MATCH_MARGIN` — the top identity must beat the runner-up by this much, else the
+  match is refused as `ambiguous` rather than coin-flipping between look-alikes.
+  Calibrate both with `python -m eval.benchmark`; see `../docs/face-matching-tuning.md`.
+
+**Liveness** — `ANTISPOOF_ENABLED`, `LIVENESS_THRESHOLD` (+ `_KIOSK`/`_PHONE`),
+`ANTISPOOF_FAIL_CLOSED`, `SELF_CHECKIN_CHALLENGE` (require a live head-turn for
+unsupervised student self check-in). Calibrate with `python -m eval.antispoof_bench`.
+
+**Attendance policy** — `ATTENDANCE_ENFORCE_WINDOW` (confine automated marking to the
+configured capture periods; staff corrections are never gated), `ATTENDANCE_DEFAULT_MODE`.
+See `../docs/attendance-policy-plan.md`.
+
+**Whole-class camera** — `CLASS_CAM_ENABLED` (master switch, off by default),
+`CLASS_CAM_CONFIRM_HITS`, `CLASS_CAM_TILES`, `CLASS_CAM_TILE_OVERLAP`,
+`CLASS_CAM_FRAME_INTERVAL`. Per-room overrides live in the `class_rooms` collection.
+See `../docs/class-camera-attendance-plan.md`.
+
+**Chat** — `CHAT_ENABLED`, `CHAT_BASE_URL`, `CHAT_MODEL`, `CHAT_MODEL_CONTEXT`,
+`CHAT_MAX_CONCURRENCY`, `CHAT_RATE_PER_MIN`. See `../docs/chat-model.md`.
+
+**Security** — set `AUTH_SECRET` in production. Without it a random per-process key
+signs session tokens, so every restart logs everyone out and tokens do not verify
+across `uvicorn --workers`.
 
 ## Demo flow
 
@@ -229,7 +302,16 @@ curl -s -F file=@live.jpg   -F source=phone localhost:8000/api/recognize | pytho
 - Liveness ships with a **classical-CV baseline** that is a functional scaffold, not a
   strong detector — install a MiniFASNet ONNX model and calibrate thresholds on real data
   before relying on it. See `../docs/face-antispoofing-plan.md`.
-- Recognition matches every detected face against all enrolled embeddings (brute-force cosine).
-  Fine for a POC roster; production scopes the gallery per section and can use a vector index.
+- Recognition is brute-force cosine over the **scoped** gallery (institute, and a
+  teacher's courses), not the whole roster — a kiosk can never match a student who
+  cannot be in that room. Brute force is exact and stays comfortable well past a
+  typical campus: ~4ms at 100k vectors. The pressure that arrives first is memory,
+  since each uvicorn worker holds its own copy; an ANN index is a scaling answer,
+  not a speed one.
+- Whole-class camera capture is built (session, tiled detection, frame ingest,
+  teacher review, per-room calibration) but **off by default** and unproven: the
+  Phase 0 coverage measurement in a real room has not been run. It can only ever add
+  "present" — it never marks anyone absent — so a badly-placed camera produces a
+  longer exception list, not wrong attendance.
 - This standalone service maps directly onto the planned production `face-service`; the MongoDB
   documents here are the POC form of the `face_embeddings` collection in the plan.
