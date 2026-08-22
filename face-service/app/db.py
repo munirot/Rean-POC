@@ -1073,17 +1073,20 @@ class Store:
             "rows": rows,
         }
 
-    def list_courses(self, in_id):
+    def list_courses(self, in_id, courses=None):
         """Courses and their sections present in an institute, derived from student
         records — the same CrID/SecID fields capture policies are keyed on, so the
-        admin can pick a scope instead of typing raw ids."""
+        admin can pick a scope instead of typing raw ids.
+
+        `courses` (a set of CrIDs) narrows the result to what a teacher actually
+        teaches, so the class-scan picker never offers someone else's class."""
         agg = {}
         for s in self.students.find(
                 {"InId": in_id, "StFl": {"$ne": "I"}},
                 {"_id": 0, "CurCrID": 1, "CurCrNm": 1, "CurCrCd": 1,
                  "CurSecID": 1, "CurSecNm": 1}):
             cr = s.get("CurCrID")
-            if not cr:
+            if not cr or (courses is not None and cr not in courses):
                 continue
             e = agg.setdefault(cr, {
                 "CrID": cr,
@@ -1343,10 +1346,15 @@ class Store:
     def record_frame(self, session_id, matches):
         """Fold one frame's confident matches into the accumulator.
 
-        `matches`: [{sid, similarity, gap, thumb?}] — already threshold+margin
-        filtered by the caller. Each student counts ONCE per frame no matter how
-        many boxes matched them, so a duplicate detection can't confirm anyone on
-        its own. Upserts are per-student `$inc`s, so concurrent frames are safe."""
+        `matches`: [{sid, similarity, gap, near?, thumb?}]. A match with near=True
+        cleared the similarity threshold but NOT the ambiguity margin — two students
+        scored within a hair of each other. Those must not count toward auto-marking,
+        but they are exactly what the Ambiguous bucket is for, so they are tallied
+        separately in `nearHits` rather than discarded.
+
+        Each student counts ONCE per frame no matter how many boxes matched them, so
+        a duplicate detection can't confirm anyone. Upserts are per-student `$inc`s,
+        so concurrent frames are safe."""
         now = datetime.now(timezone.utc)
         seen = {}
         for m in matches:                      # collapse duplicates within the frame
@@ -1354,24 +1362,29 @@ class Store:
             if not sid:
                 continue
             prev = seen.get(sid)
-            if prev is None or (m.get("similarity") or 0) > (prev.get("similarity") or 0):
+            # a confident hit always outranks a near-miss for the same student
+            better = (prev is None
+                      or (prev.get("near") and not m.get("near"))
+                      or (bool(prev.get("near")) == bool(m.get("near"))
+                          and (m.get("similarity") or 0) > (prev.get("similarity") or 0)))
+            if better:
                 seen[sid] = m
+        confident = 0
         for sid, m in seen.items():
-            sim = float(m.get("similarity") or 0.0)
-            gap = float(m.get("gap") or 0.0)
-            set_on_insert = {"firstSeen": now}
-            if m.get("thumb"):
-                set_on_insert = {**set_on_insert}
+            near = bool(m.get("near"))
+            confident += 0 if near else 1
             self.class_obs.update_one(
                 {"sessionId": str(session_id), "StuID": sid},
-                {"$inc": {"hits": 1},
-                 "$max": {"bestSim": sim, "bestGap": gap},
-                 "$set": {"lastSeen": now, **({"thumb": m["thumb"]} if m.get("thumb") else {})},
-                 "$setOnInsert": set_on_insert},
+                {"$inc": {"nearHits": 1} if near else {"hits": 1},
+                 "$max": {"bestSim": float(m.get("similarity") or 0.0),
+                          "bestGap": float(m.get("gap") or 0.0)},
+                 "$set": {"lastSeen": now,
+                          **({"thumb": m["thumb"]} if m.get("thumb") else {})},
+                 "$setOnInsert": {"firstSeen": now}},
                 upsert=True)
         self.class_sessions.update_one({"_id": ObjectId(session_id)},
                                        {"$inc": {"frames": 1}})
-        return len(seen)
+        return confident
 
     def list_observations(self, session_id):
         return [{k: v for k, v in d.items() if k != "_id"}
@@ -1382,27 +1395,28 @@ class Store:
         """Split a roster into the three buckets from plan §2.1. Pure.
 
         confirmed  — enough distinct frames to auto-mark
-        ambiguous  — seen, but not enough times to be trusted alone
-        notDetected— never recognized; the camera says NOTHING about these, so they
-                     are for the teacher to resolve, not to be marked absent.
+        ambiguous  — seen but not enough to trust: too few confident frames, or the
+                     camera kept hitting the ambiguity margin against a look-alike
+                     (nearHits). Both need a human, so both land here.
+        notDetected— never recognized at all; the camera says NOTHING about these, so
+                     they are for the teacher to resolve, not to be marked absent.
         """
         by_sid = {o.get("StuID"): o for o in observations}
         confirmed, ambiguous, not_detected = [], [], []
         for s in roster:
             sid = s.get("sid")
-            o = by_sid.get(sid)
+            o = by_sid.get(sid) or {}
             row = {"sid": sid, "name": s.get("name"), "cls": s.get("cls"),
-                   "hits": (o or {}).get("hits", 0),
-                   "bestSim": (o or {}).get("bestSim"),
-                   "thumb": (o or {}).get("thumb")}
-            if o and row["hits"] >= confirm_hits:
+                   "hits": o.get("hits", 0), "nearHits": o.get("nearHits", 0),
+                   "bestSim": o.get("bestSim"), "thumb": o.get("thumb")}
+            if row["hits"] >= confirm_hits:
                 confirmed.append(row)
-            elif o and row["hits"] > 0:
+            elif row["hits"] > 0 or row["nearHits"] > 0:
                 ambiguous.append(row)
             else:
                 not_detected.append(row)
         confirmed.sort(key=lambda r: -r["hits"])
-        ambiguous.sort(key=lambda r: -r["hits"])
+        ambiguous.sort(key=lambda r: (-r["hits"], -r["nearHits"]))
         not_detected.sort(key=lambda r: str(r["sid"]))
         return {"confirmed": confirmed, "ambiguous": ambiguous,
                 "notDetected": not_detected}

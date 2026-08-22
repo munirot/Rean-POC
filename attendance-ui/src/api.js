@@ -111,6 +111,17 @@ export const api = {
     body: JSON.stringify({ periods }),
   }),
 
+  // whole-class camera sessions
+  myCourses: () => j('/api/courses'),
+  openClassSession: (body) => j('/api/class-sessions', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+  }),
+  classSession: (id) => j(`/api/class-sessions/${id}`),
+  closeClassSession: (id) => j(`/api/class-sessions/${id}/close`, { method: 'POST' }),
+  mintClassDevice: (body) => j('/api/admin/class-devices', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+  }),
+
   // leave / excused absence
   requestLeave: (body) => j('/api/attendance/leave', {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),

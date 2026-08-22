@@ -144,10 +144,77 @@ export default function Settings() {
       </div>
 
       <CapturePolicies setToast={setToast} />
+      <ClassCameraDevices setToast={setToast} />
       <SessionAudit />
 
       {toast}
     </>
+  )
+}
+
+// Camera credentials, one per room. A classroom device is physically reachable, so
+// it gets its own token type that carries a room rather than a login — it can push
+// frames into a sitting a teacher opened and nothing else. Shown once, never stored
+// readable, so re-issuing is the recovery path rather than looking it up.
+function ClassCameraDevices({ setToast }) {
+  const [enabled, setEnabled] = useState(null)
+  const [room, setRoom] = useState('')
+  const [issued, setIssued] = useState(null)
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+
+  useEffect(() => {
+    api.myCourses().then((r) => setEnabled(!!r.classCameraEnabled)).catch(() => setEnabled(false))
+  }, [])
+
+  async function mint() {
+    if (!room.trim()) { setErr('Give the room a name first.'); return }
+    setErr(''); setBusy(true)
+    try {
+      const r = await api.mintClassDevice({ room: room.trim() })
+      setIssued(r)
+      setToast(`Camera token issued for ${r.room}`)
+    } catch (e) { setErr(e.message) } finally { setBusy(false) }
+  }
+
+  if (!enabled) return null
+
+  return (
+    <Card className="mt-4">
+      <Card.Header className="fw-bold text-primary">Room cameras</Card.Header>
+      <Card.Body>
+        {err && <Alert variant="danger" className="fs-3">{err}</Alert>}
+        <div className="d-flex flex-wrap gap-2 align-items-end">
+          <div>
+            <Form.Label className="fs-2 text-secondary fw-semibold mb-1">Room</Form.Label>
+            <Form.Control size="sm" placeholder="ROOM-A" value={room}
+              onChange={(e) => setRoom(e.target.value)} />
+          </div>
+          <Button variant="primary" icon="key" disabled={busy} onClick={mint}>
+            {busy ? 'Issuing…' : 'Issue camera token'}
+          </Button>
+        </div>
+
+        {issued && (
+          <Alert variant="warning" className="fs-3 mt-3 mb-0">
+            <div className="fw-semibold mb-1">
+              Token for {issued.room} — copy it now, it is not shown again.
+            </div>
+            <code style={{ wordBreak: 'break-all' }}>{issued.token}</code>
+            <div className="text-secondary fs-2 mt-2">
+              Valid {issued.ttlDays} day(s). The camera sends it as
+              <code className="mx-1">Authorization: Bearer …</code>
+              when posting frames. It cannot read the roster, read attendance, or
+              mark anyone.
+            </div>
+          </Alert>
+        )}
+        <div className="text-secondary fs-2 mt-2">
+          Issuing a new token for a room does not revoke the old one — rotate
+          <code className="mx-1">AUTH_SECRET</code> to invalidate every token at once.
+        </div>
+      </Card.Body>
+    </Card>
   )
 }
 

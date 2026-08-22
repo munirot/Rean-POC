@@ -10,6 +10,7 @@ import Records from './pages/Records'
 import Insights from './pages/Insights'
 import Disputes from './pages/Disputes'
 import Leave from './pages/Leave'
+import ClassScan from './pages/ClassScan'
 import Settings from './pages/Settings'
 import Chat from './pages/Chat'
 import SelectInstitution from './pages/SelectInstitution'
@@ -45,6 +46,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
           <Route path="insights" element={<RequireRole roles={['admin', 'staff']}><Insights /></RequireRole>} />
           <Route path="disputes" element={<RequireRole roles={['admin', 'staff']}><Disputes /></RequireRole>} />
           <Route path="leave" element={<RequireRole roles={['admin', 'staff']}><Leave /></RequireRole>} />
+          <Route path="class-scan" element={<RequireRole roles={['admin', 'staff']}><ClassScan /></RequireRole>} />
           {/* Institution configuration — admin only, not staff. */}
           <Route path="settings" element={<RequireRole roles={['admin']}><Settings /></RequireRole>} />
           {/* Open to all authenticated roles (backend scopes the data to the caller).

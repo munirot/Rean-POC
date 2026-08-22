@@ -678,6 +678,18 @@ def mint_class_device_token(req: ClassDeviceToken, user: dict = Depends(current_
             "token": authmod.issue_device(room, user.get("InId"), ttl_days=ttl)}
 
 
+@app.get("/api/courses")
+def list_my_courses(user: dict = Depends(current_user)):
+    """Courses the caller may act on — narrowed to a teacher's own courses, so the
+    class-scan picker never offers someone else's class. Admins see the institute."""
+    require_staff(user)
+    return {"InId": user.get("InId"),
+            "courses": get_store().list_courses(user.get("InId"),
+                                                courses=user.get("courses")),
+            "classCameraEnabled": settings.class_cam_enabled,
+            "confirmHits": settings.class_cam_confirm_hits}
+
+
 @app.post("/api/class-sessions")
 def open_class_session(req: ClassSessionOpen, user: dict = Depends(current_user)):
     """Open a sitting for a class. Staff only; idempotent per class/date/period."""
@@ -738,9 +750,18 @@ def _ingest_frame_sync(session_id: str, data: bytes, device: dict):
                                margin=settings.match_margin)
         # Per-face liveness is intentionally skipped for this source: the cues are
         # noise on a small distant face and the room is supervised (plan §6.3).
-        if m.get("recognized") and m.get("sid"):
+        if not m.get("sid"):
+            continue
+        if m.get("recognized"):
             matches.append({"sid": m["sid"], "similarity": m.get("similarity"),
                             "gap": m.get("gap")})
+        elif m.get("reason") == "ambiguous":
+            # Cleared the threshold but lost to the margin guard against a
+            # look-alike. Not trustworthy enough to mark, but discarding it would
+            # leave the student in "not detected" as if the camera never saw
+            # anyone — so it is tallied as near-evidence for the teacher instead.
+            matches.append({"sid": m["sid"], "similarity": m.get("similarity"),
+                            "gap": m.get("gap"), "near": True})
     counted = store.record_frame(session_id, matches)
     return {"ok": True, "faces": len(faces), "matched": len(matches),
             "students": counted}

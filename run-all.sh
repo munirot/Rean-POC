@@ -13,8 +13,15 @@ if [ ! -d .venv ]; then
   ./.venv/bin/pip install --upgrade pip
   ./.venv/bin/pip install -r requirements.txt
 fi
-# load .env (MONGO_URI, MODEL_PACK, ...)
-if [ -f .env ]; then set -a; . ./.env; set +a; fi
+# The app loads face-service/.env itself (app/config.py), and python-dotenv does
+# NOT overwrite variables already in the environment. Sourcing the file here as
+# well used to clobber them, so `CLASS_CAM_ENABLED=true ./run-all.sh` silently did
+# nothing. We now read only the two values this script itself needs, and only when
+# they aren't already set — so an explicit override always wins, everywhere.
+if [ -f .env ]; then
+  : "${HOST:=$(sed -n 's/^HOST=//p' .env | tail -1)}"
+  : "${PORT:=$(sed -n 's/^PORT=//p' .env | tail -1)}"
+fi
 
 echo "[run] face-service  -> http://localhost:${PORT:-8000}"
 ./.venv/bin/uvicorn app.main:app --host "${HOST:-0.0.0.0}" --port "${PORT:-8000}" &

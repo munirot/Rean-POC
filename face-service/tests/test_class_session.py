@@ -169,9 +169,58 @@ def test_frames_with_no_matches_still_count():
     assert s.class_obs.docs == []
 
 
+def test_margin_rejected_matches_tally_separately():
+    """A face that cleared the threshold but lost to the ambiguity margin must not
+    count toward auto-marking — but it must not vanish either, or the student looks
+    like the camera never saw anyone."""
+    s = _store(); sess = _open(s)
+    for _ in range(5):
+        s.record_frame(sess["id"], [{"sid": "S1", "similarity": 0.9, "gap": 0.01,
+                                     "near": True}])
+    o = s.class_obs.find_one({"sessionId": sess["id"], "StuID": "S1"})
+    assert o.get("hits", 0) == 0 and o["nearHits"] == 5
+
+
+def test_near_misses_never_auto_mark():
+    s = _store(); sess = _open(s)
+    for _ in range(9):
+        s.record_frame(sess["id"], [{"sid": "S1", "similarity": 0.9, "gap": 0.01,
+                                     "near": True}])
+    view, _ = s.close_class_session(STAFF, sess["id"], confirm_hits=3)
+    assert s.marked == []                                  # nothing marked
+    assert [r["sid"] for r in view["ambiguous"]] == ["S1"]  # surfaced for the teacher
+
+
+def test_a_confident_hit_outranks_a_near_miss_in_the_same_frame():
+    s = _store(); sess = _open(s)
+    s.record_frame(sess["id"], [
+        {"sid": "S1", "similarity": 0.95, "gap": 0.01, "near": True},
+        {"sid": "S1", "similarity": 0.60, "gap": 0.40},
+    ])
+    o = s.class_obs.find_one({"StuID": "S1"})
+    assert o.get("hits") == 1 and not o.get("nearHits")
+
+
+def test_record_frame_returns_only_confident_students():
+    s = _store(); sess = _open(s)
+    n = s.record_frame(sess["id"], [
+        {"sid": "S1", "similarity": 0.6, "gap": 0.3},
+        {"sid": "S2", "similarity": 0.9, "gap": 0.01, "near": True},
+    ])
+    assert n == 1
+
+
 # --------------------------------------------------------------------------- #
 # the three buckets (pure)
 # --------------------------------------------------------------------------- #
+def test_near_hits_alone_land_in_ambiguous_not_not_detected():
+    obs = [{"StuID": "S1", "hits": 0, "nearHits": 4}]
+    b = Store.bucket_observations(ROSTER, obs, confirm_hits=3)
+    assert [r["sid"] for r in b["ambiguous"]] == ["S1"]
+    assert "S1" not in [r["sid"] for r in b["notDetected"]]
+
+
+
 def test_buckets_split_by_confirm_hits():
     obs = [{"StuID": "S1", "hits": 5, "bestSim": 0.8},
            {"StuID": "S2", "hits": 1, "bestSim": 0.4}]
