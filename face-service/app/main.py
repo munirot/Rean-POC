@@ -687,7 +687,8 @@ def list_my_courses(user: dict = Depends(current_user)):
             "courses": get_store().list_courses(user.get("InId"),
                                                 courses=user.get("courses")),
             "classCameraEnabled": settings.class_cam_enabled,
-            "confirmHits": settings.class_cam_confirm_hits}
+            "confirmHits": settings.class_cam_confirm_hits,
+            "frameInterval": settings.class_cam_frame_interval}
 
 
 @app.post("/api/class-sessions")

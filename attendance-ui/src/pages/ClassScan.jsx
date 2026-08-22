@@ -13,6 +13,36 @@ import { useToast } from '../components/Layout'
 const POLL_MS = 5000
 const LS_KEY = 'rean.classSession'
 
+// "No one confirmed yet" and "the camera stopped ten minutes ago" look identical
+// on a bucket list, and only one of them needs someone to go and look at the
+// camera. Silence is measured against the expected frame interval.
+function CameraHealth({ session, interval }) {
+  const [now, setNow] = useState(Date.now())
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(id)
+  }, [])
+
+  if (!session.lastFrameAt) {
+    return (
+      <div className="text-secondary fs-2">
+        Waiting for the camera to send its first frame…
+      </div>
+    )
+  }
+  const silentS = Math.max(0, Math.round((now - new Date(session.lastFrameAt)) / 1000))
+  // Two missed intervals is noise; beyond that something is actually wrong.
+  const stale = silentS > Math.max(15, interval * 3)
+  return (
+    <div>
+      <div className="text-secondary fs-2 fw-semibold text-uppercase">Camera</div>
+      {stale
+        ? <Badge bg="danger">Silent for {silentS < 90 ? `${silentS}s` : `${Math.round(silentS / 60)}m`}</Badge>
+        : <Badge bg="success">Live · {silentS}s ago</Badge>}
+    </div>
+  )
+}
+
 function Bucket({ title, tone, hint, rows, children }) {
   return (
     <Card className="mb-3">
@@ -34,6 +64,7 @@ export default function ClassScan() {
   const [courses, setCourses] = useState([])
   const [camEnabled, setCamEnabled] = useState(null)
   const [confirmHits, setConfirmHits] = useState(3)
+  const [cameraInterval, setCameraInterval] = useState(4)
   const [form, setForm] = useState({ CrID: '', SecID: '', session: 'Morning', camera: '' })
   const [periods, setPeriods] = useState([])
   const [view, setView] = useState(null)     // {session, confirmed, ambiguous, notDetected}
@@ -47,6 +78,7 @@ export default function ClassScan() {
       setCourses(r.courses || [])
       setCamEnabled(!!r.classCameraEnabled)
       if (r.confirmHits) setConfirmHits(r.confirmHits)
+      if (r.frameInterval) setCameraInterval(r.frameInterval)
     }).catch((e) => { setErr(e.message); setCamEnabled(false) })
     api.attendancePolicy().then((p) => setPeriods(p.periods || [])).catch(() => {})
     // Re-attach to a session left open by a reload — opening is idempotent, but
@@ -224,11 +256,7 @@ export default function ClassScan() {
                 <div className="text-secondary fs-2 fw-semibold text-uppercase">Confirm at</div>
                 <div className="fw-semibold">{view.confirmHits} hits</div>
               </div>
-              {open_ && s.frames === 0 && (
-                <div className="text-secondary fs-2">
-                  Waiting for the camera to send its first frame…
-                </div>
-              )}
+              {open_ && <CameraHealth session={s} interval={cameraInterval} />}
             </Card.Body>
           </Card>
 

@@ -1305,6 +1305,11 @@ class Store:
                 "frames": d.get("frames", 0), "startedBy": d.get("startedBy"),
                 "startedAt": st.isoformat() if isinstance(st, datetime) else st,
                 "closedAt": ct.isoformat() if isinstance(ct, datetime) else ct,
+                # When the camera last delivered anything. A teacher must be able to
+                # tell "nobody recognised yet" from "the camera died ten minutes ago".
+                "lastFrameAt": (d["lastFrameAt"].isoformat()
+                                if isinstance(d.get("lastFrameAt"), datetime)
+                                else d.get("lastFrameAt")),
                 "stats": d.get("stats") or {}}
 
     def open_class_session(self, scope, cr_id, sec_id, date=None, session=None,
@@ -1383,7 +1388,8 @@ class Store:
                  "$setOnInsert": {"firstSeen": now}},
                 upsert=True)
         self.class_sessions.update_one({"_id": ObjectId(session_id)},
-                                       {"$inc": {"frames": 1}})
+                                       {"$inc": {"frames": 1},
+                                        "$set": {"lastFrameAt": now}})
         return confident
 
     def list_observations(self, session_id):
