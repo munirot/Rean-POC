@@ -275,7 +275,33 @@ CLASS_CAM_LIVENESS=false         # see §6.3
 | **1. Session + ingest** | `class_sessions`/`class_observations`, the four endpoints, tiled detection in `engine.py`, accumulation. Manual trigger via API; no UI. Tests for accumulation + confirmation logic (fake store, as with disputes/gallery scope). |
 | **2. Teacher review UI** | New page: Present (auto) / Not detected / Ambiguous, with thumbnails for ambiguous and one-tap resolution via `set_attendance`. Reuses `attendance_roster`. |
 | **3. Capture device** | Edge device (Pi + camera or IP/RTSP puller) posting frames with a device token; retry/backoff; health surface. |
-| **4. Automation** | Timetable-driven session open/close (activates the seeded, currently-unbuilt `TIMETBL` menu), multi-camera rooms, per-room calibration. |
+| **4. Automation** | ~~Timetable-driven session open/close~~ (**deferred, see below**), multi-camera rooms ✅, per-room calibration ✅. |
+
+### 4a. Why timetable automation is deferred
+
+Multi-camera rooms and per-room calibration are built. Timetable-driven open/close
+is not, and should not be built here yet.
+
+`TIMETBL` is a **menu code only** — it appears in `roles.json` and each student's
+`access_control.menus`, and nowhere else. There is no schedule collection: no
+mapping of section → room → weekday → period → staff, no term dates, no holiday
+calendar. Driving sessions from a timetable therefore means *inventing* one.
+
+That is the wrong place to invent it. A class schedule is a system-of-record
+concern for the campus platform (MyCAMU) — it is authored by a registrar, it
+changes with room bookings and staff cover, and every other module (exams,
+billing, reporting) needs the same truth. A schedule modelled inside face-service
+would immediately be a second, diverging copy, and the first timetable change
+nobody propagated would silently open sittings for the wrong room.
+
+**The unlock is data, not code.** Once a real timetable exists — imported from the
+campus system into a collection with `{InId, CrID, SecID, room, weekday, period}` —
+the automation itself is small: a scheduled job opening sittings at period start
+and closing them at period end, reusing `open_class_session` / `close_class_session`
+unchanged. Both are already idempotent, which is exactly what a scheduler needs.
+
+Until then the teacher tap is the trigger, and the capture period from
+`attendance-policy-plan.md` already bounds when a sitting may mark anyone.
 
 Phases 1–2 alone deliver the product value; 3–4 remove the manual trigger.
 

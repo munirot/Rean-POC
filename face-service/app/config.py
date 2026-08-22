@@ -57,6 +57,10 @@ class Settings:
     # (session, student) accumulating evidence across frames.
     class_sessions_coll: str = _get("FACE_CLASS_SESSIONS_COLL", "class_sessions")
     class_observations_coll: str = _get("FACE_CLASS_OBS_COLL", "class_observations")
+    # Per-room camera calibration. A deep lecture hall and a small seminar room
+    # need different tiling and confirmation thresholds; one global setting can't
+    # be right for both.
+    class_rooms_coll: str = _get("FACE_CLASS_ROOMS_COLL", "class_rooms")
 
     # --- Capture window enforcement ----------------------------------------
     # OFF by default: an institute that has configured no periods behaves exactly

@@ -118,6 +118,11 @@ export const api = {
   }),
   classSession: (id) => j(`/api/class-sessions/${id}`),
   closeClassSession: (id) => j(`/api/class-sessions/${id}/close`, { method: 'POST' }),
+  classRooms: () => j('/api/admin/class-rooms'),
+  saveClassRoom: (body) => j('/api/admin/class-rooms', {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+  }),
+  deleteClassRoom: (room) => j(`/api/admin/class-rooms/${encodeURIComponent(room)}`, { method: 'DELETE' }),
   mintClassDevice: (body) => j('/api/admin/class-devices', {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
   }),

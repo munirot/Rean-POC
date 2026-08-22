@@ -216,7 +216,17 @@ class ClassSessionOpen(BaseModel):
     SecID: Optional[str] = None
     date: Optional[str] = None        # YYYY-MM-DD, defaults to today
     session: Optional[str] = None     # capture period name, defaults to "Morning"
-    camera: Optional[str] = None      # room/camera label, for the audit trail
+    camera: Optional[str] = None      # single room (kept for older callers)
+    cameras: Optional[List[str]] = None   # rooms allowed to feed this sitting
+
+
+class RoomUpsert(BaseModel):
+    """Per-room camera calibration. Omitted fields fall back to the global default."""
+    room: str
+    confirmHits: Optional[int] = None
+    tiles: Optional[str] = None           # "3x2", or "off"
+    tileOverlap: Optional[float] = None
+    note: Optional[str] = None
 
 
 class ClassDeviceToken(BaseModel):

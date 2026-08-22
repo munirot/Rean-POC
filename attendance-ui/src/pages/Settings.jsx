@@ -158,13 +158,23 @@ export default function Settings() {
 // readable, so re-issuing is the recovery path rather than looking it up.
 function ClassCameraDevices({ setToast }) {
   const [enabled, setEnabled] = useState(null)
+  const [rooms, setRooms] = useState([])
+  const [defaults, setDefaults] = useState(null)
   const [room, setRoom] = useState('')
+  const [cal, setCal] = useState({ confirmHits: '', tiles: '', tileOverlap: '', note: '' })
   const [issued, setIssued] = useState(null)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
 
+  const load = () => api.classRooms()
+    .then((r) => { setRooms(r.rooms || []); setDefaults(r.defaults) })
+    .catch(() => {})
+
   useEffect(() => {
-    api.myCourses().then((r) => setEnabled(!!r.classCameraEnabled)).catch(() => setEnabled(false))
+    api.myCourses().then((r) => {
+      setEnabled(!!r.classCameraEnabled)
+      if (r.classCameraEnabled) load()
+    }).catch(() => setEnabled(false))
   }, [])
 
   async function mint() {
@@ -177,6 +187,28 @@ function ClassCameraDevices({ setToast }) {
     } catch (e) { setErr(e.message) } finally { setBusy(false) }
   }
 
+  async function saveRoom() {
+    if (!room.trim()) { setErr('Give the room a name first.'); return }
+    setErr(''); setBusy(true)
+    try {
+      await api.saveClassRoom({
+        room: room.trim(),
+        confirmHits: cal.confirmHits === '' ? null : Number(cal.confirmHits),
+        tiles: cal.tiles || null,
+        tileOverlap: cal.tileOverlap === '' ? null : Number(cal.tileOverlap),
+        note: cal.note || null,
+      })
+      setToast(`Calibration saved for ${room.trim()}`)
+      setCal({ confirmHits: '', tiles: '', tileOverlap: '', note: '' })
+      await load()
+    } catch (e) { setErr(e.message) } finally { setBusy(false) }
+  }
+
+  async function removeRoom(r) {
+    try { await api.deleteClassRoom(r); setToast(`${r} reset to defaults`); await load() }
+    catch (e) { setErr(e.message) }
+  }
+
   if (!enabled) return null
 
   return (
@@ -184,15 +216,69 @@ function ClassCameraDevices({ setToast }) {
       <Card.Header className="fw-bold text-primary">Room cameras</Card.Header>
       <Card.Body>
         {err && <Alert variant="danger" className="fs-3">{err}</Alert>}
+
+        {rooms.length > 0 && (
+          <Table responsive className="camu-table mb-3 align-middle">
+            <thead>
+              <tr><th>Room</th><th>Confirm at</th><th>Tiles</th><th>Overlap</th>
+                <th>Note</th><th></th></tr>
+            </thead>
+            <tbody>
+              {rooms.map((r) => (
+                <tr key={r.room} className="table-list_body">
+                  <td className="fs-3 p-3 fw-semibold">{r.room}</td>
+                  <td className="fs-3 p-3">{r.confirmHits} hits</td>
+                  <td className="fs-3 p-3">{r.tiles}</td>
+                  <td className="fs-3 p-3">{r.tileOverlap}</td>
+                  <td className="fs-3 p-3">{r.note || <span className="text-secondary">—</span>}</td>
+                  <td className="fs-3 p-3 text-end">
+                    <Button variant="secondary" icon="delete"
+                      onClick={() => removeRoom(r.room)}>Reset</Button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </Table>
+        )}
+
         <div className="d-flex flex-wrap gap-2 align-items-end">
           <div>
             <Form.Label className="fs-2 text-secondary fw-semibold mb-1">Room</Form.Label>
             <Form.Control size="sm" placeholder="ROOM-A" value={room}
               onChange={(e) => setRoom(e.target.value)} />
           </div>
+          <div style={{ maxWidth: 120 }}>
+            <Form.Label className="fs-2 text-secondary fw-semibold mb-1">Confirm at</Form.Label>
+            <Form.Control size="sm" type="number" min="1"
+              placeholder={defaults ? String(defaults.confirmHits) : ''}
+              value={cal.confirmHits}
+              onChange={(e) => setCal({ ...cal, confirmHits: e.target.value })} />
+          </div>
+          <div style={{ maxWidth: 110 }}>
+            <Form.Label className="fs-2 text-secondary fw-semibold mb-1">Tiles</Form.Label>
+            <Form.Control size="sm" placeholder={defaults?.tiles || '3x2'}
+              value={cal.tiles}
+              onChange={(e) => setCal({ ...cal, tiles: e.target.value })} />
+          </div>
+          <div style={{ maxWidth: 110 }}>
+            <Form.Label className="fs-2 text-secondary fw-semibold mb-1">Overlap</Form.Label>
+            <Form.Control size="sm" type="number" step="0.05" min="0" max="0.45"
+              placeholder={defaults ? String(defaults.tileOverlap) : ''}
+              value={cal.tileOverlap}
+              onChange={(e) => setCal({ ...cal, tileOverlap: e.target.value })} />
+          </div>
+          <Button variant="secondary" icon="tune" disabled={busy} onClick={saveRoom}>
+            Save calibration
+          </Button>
           <Button variant="primary" icon="key" disabled={busy} onClick={mint}>
             {busy ? 'Issuing…' : 'Issue camera token'}
           </Button>
+        </div>
+        <div className="text-secondary fs-2 mt-2">
+          Blank fields inherit the server defaults
+          {defaults && <> (confirm at {defaults.confirmHits} hits, tiles {defaults.tiles},
+            overlap {defaults.tileOverlap})</>}. A deeper room usually needs finer
+          tiling; raise <em>confirm at</em> if a room produces uncertain matches.
         </div>
 
         {issued && (

@@ -109,7 +109,7 @@ export default function ClassScan() {
       const r = await api.openClassSession({
         CrID: form.CrID, SecID: form.SecID || null,
         date: todayStr(), session: form.session,
-        camera: form.camera.trim() || null,
+        cameras: form.camera.split(',').map((x) => x.trim()).filter(Boolean),
       })
       localStorage.setItem(LS_KEY, r.session.id)
       await refresh(r.session.id)
@@ -214,8 +214,9 @@ export default function ClassScan() {
                 )}
               </Col>
               <Col md={2}>
-                <Form.Label className="fs-2 text-secondary fw-semibold mb-1">Camera</Form.Label>
-                <Form.Control size="sm" placeholder="ROOM-A" value={form.camera}
+                <Form.Label className="fs-2 text-secondary fw-semibold mb-1">Camera(s)</Form.Label>
+                <Form.Control size="sm" placeholder="ROOM-A, ROOM-A-REAR"
+                  value={form.camera}
                   onChange={(e) => setForm({ ...form, camera: e.target.value })} />
               </Col>
               <Col md={1}>
@@ -226,8 +227,10 @@ export default function ClassScan() {
             </Row>
             <div className="text-secondary fs-2 mt-2">
               A student is auto-marked once the camera has clearly recognised them in{' '}
-              <strong>{confirmHits}</strong> separate frames. Nobody is ever marked
-              absent by the camera.
+              <strong>{confirmHits}</strong> separate frames (a room may be calibrated
+              differently). List several cameras, comma-separated, to cover a wide
+              room — only those rooms' devices may feed this sitting. Nobody is ever
+              marked absent by the camera.
             </div>
           </Card.Body>
         </Card>
@@ -240,7 +243,8 @@ export default function ClassScan() {
               <div>
                 <div className="text-secondary fs-2 fw-semibold text-uppercase">Sitting</div>
                 <div className="fw-semibold text-primary">
-                  {s.date} · {s.session}{s.camera ? ` · ${s.camera}` : ''}
+                  {s.date} · {s.session}
+                  {s.cameras?.length ? ` · ${s.cameras.join(' + ')}` : ''}
                 </div>
               </div>
               <div>
@@ -254,7 +258,7 @@ export default function ClassScan() {
               </div>
               <div>
                 <div className="text-secondary fs-2 fw-semibold text-uppercase">Confirm at</div>
-                <div className="fw-semibold">{view.confirmHits} hits</div>
+                <div className="fw-semibold">{s.confirmHits || view.confirmHits} hits</div>
               </div>
               {open_ && <CameraHealth session={s} interval={cameraInterval} />}
             </Card.Body>

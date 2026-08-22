@@ -76,6 +76,7 @@ def _store(open_session=True):
     s._indexed = True
     s.class_sessions = _Col()
     s.class_obs = _Col()
+    s.class_rooms = _Col()
     s.attn = _Col()
     s.students = _Col([{"StuID": r["sid"], "CurCrID": "C1"} for r in ROSTER])
     s.list_students = lambda scope=None: list(ROSTER)
@@ -288,6 +289,88 @@ def test_staff_outside_the_course_cannot_view_or_close():
     s = _store(); sess = _open(s)
     assert s.class_session_view(STAFF_OUT, sess["id"])[1] == "forbidden"
     assert s.close_class_session(STAFF_OUT, sess["id"])[1] == "forbidden"
+
+
+# --------------------------------------------------------------------------- #
+# per-room calibration (Phase 4)
+# --------------------------------------------------------------------------- #
+def test_unconfigured_room_falls_back_to_global_defaults():
+    s = _store()
+    r = s.resolve_room("IN1", "ROOM-Z")
+    assert r["configured"] is False
+    assert r["confirmHits"] == settings.class_cam_confirm_hits
+    assert r["tiles"] == settings.class_cam_tiles
+
+
+def test_room_overrides_apply():
+    s = _store()
+    out, err = s.set_room("IN1", "HALL-1", confirm_hits=5, tiles="4x3",
+                          tile_overlap=0.2, note="deep hall")
+    assert err is None
+    r = s.resolve_room("IN1", "HALL-1")
+    assert (r["confirmHits"], r["tiles"], r["tileOverlap"]) == (5, "4x3", 0.2)
+    assert r["configured"] is True and r["note"] == "deep hall"
+
+
+def test_bad_room_calibration_is_refused_and_not_stored():
+    s = _store()
+    for kwargs, needle in [
+            ({"confirm_hits": 0}, "at least 1"),
+            ({"confirm_hits": "many"}, "whole number"),
+            ({"tiles": "wide"}, "3x2"),
+            ({"tile_overlap": 0.9}, "between 0 and 0.5"),
+            ({"tile_overlap": "lots"}, "must be a number")]:
+        out, err = s.set_room("IN1", "HALL-1", **kwargs)
+        assert out is None and needle in err, (kwargs, err)
+    assert s.class_rooms.docs == []
+
+
+def test_room_name_is_required():
+    assert Store.validate_room("   ")[1] == "room is required"
+
+
+def test_tiles_parsing():
+    assert Store.parse_tiles("3x2") == (3, 2)
+    assert Store.parse_tiles("off") is None
+    assert Store.parse_tiles("") is None
+    assert Store.parse_tiles("0x2") is None
+    assert Store.parse_tiles("junk") is None
+
+
+# --------------------------------------------------------------------------- #
+# multi-camera rooms + the confirm-hits snapshot
+# --------------------------------------------------------------------------- #
+def test_session_records_every_camera_allowed_to_feed_it():
+    s = _store()
+    sess, err = s.open_class_session(STAFF, "C1", "SC1", date="2026-08-22",
+                                     cameras=["ROOM-A", "ROOM-A-REAR"])
+    assert err is None
+    assert sess["cameras"] == ["ROOM-A", "ROOM-A-REAR"]
+    assert sess["camera"] == "ROOM-A"        # first is the primary, for display
+
+
+def test_single_camera_still_works():
+    s = _store()
+    sess, _ = s.open_class_session(STAFF, "C1", "SC1", camera="ROOM-B")
+    assert sess["cameras"] == ["ROOM-B"]
+
+
+def test_confirm_hits_is_snapshotted_from_the_room_at_open():
+    """An admin editing a room mid-lesson must not move the bar under a sitting
+    that is already accumulating evidence."""
+    s = _store()
+    s.set_room("IN1", "HALL-1", confirm_hits=6)
+    sess, _ = s.open_class_session(STAFF, "C1", "SC1", cameras=["HALL-1"])
+    assert sess["confirmHits"] == 6
+    s.set_room("IN1", "HALL-1", confirm_hits=2)          # changed after opening
+    view, _ = s.class_session_view(STAFF, sess["id"])
+    assert view["confirmHits"] == 6                       # sitting keeps its own
+
+
+def test_session_without_a_camera_uses_the_global_default():
+    s = _store()
+    sess, _ = s.open_class_session(STAFF, "C1", "SC1")
+    assert sess["confirmHits"] == settings.class_cam_confirm_hits
 
 
 # --------------------------------------------------------------------------- #

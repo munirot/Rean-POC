@@ -91,6 +91,7 @@ class Store:
         self.leave = db[settings.leave_coll]
         self.class_sessions = db[settings.class_sessions_coll]
         self.class_obs = db[settings.class_observations_coll]
+        self.class_rooms = db[settings.class_rooms_coll]
         self._indexed = False
         # Cached gallery (embeddings joined to names). Rebuilt lazily and only when
         # enrollment changes, so live recognition doesn't re-scan Mongo every frame.
@@ -228,6 +229,8 @@ class Store:
             self.class_obs.create_index([("sessionId", ASCENDING), ("StuID", ASCENDING)],
                                         unique=True)
             self.class_obs.create_index([("sessionId", ASCENDING), ("hits", DESCENDING)])
+            self.class_rooms.create_index([("InId", ASCENDING), ("room", ASCENDING)],
+                                          unique=True)
             self._indexed = True
 
     # seed() kept as a no-op hook (real data comes from the migration, not from here)
@@ -1296,12 +1299,94 @@ class Store:
     # nothing else — it never marks anyone absent, because a student can sit through
     # a whole class without ever cleanly facing the lens (plan §2.1).
     @staticmethod
+    def parse_tiles(value):
+        """'3x2' -> (3, 2); 'off'/blank/invalid -> None (whole-frame detection)."""
+        v = str(value or "").strip().lower()
+        if not v or v in ("off", "none", "0"):
+            return None
+        try:
+            c, r = v.split("x")
+            c, r = int(c), int(r)
+        except (ValueError, TypeError):
+            return None
+        return (c, r) if c >= 1 and r >= 1 else None
+
+    @staticmethod
+    def validate_room(room, confirm_hits=None, tiles=None, tile_overlap=None):
+        """Return (fields, error). Pure, so a bad calibration is refused before it
+        can silently break every sitting in that room."""
+        room = (room or "").strip()
+        if not room:
+            return None, "room is required"
+        out = {"room": room}
+        if confirm_hits is not None and str(confirm_hits) != "":
+            try:
+                ch = int(confirm_hits)
+            except (ValueError, TypeError):
+                return None, "confirmHits must be a whole number"
+            if ch < 1:
+                return None, "confirmHits must be at least 1"
+            out["confirmHits"] = ch
+        if tiles is not None and str(tiles).strip() != "":
+            if Store.parse_tiles(tiles) is None and str(tiles).strip().lower() not in (
+                    "off", "none", "0"):
+                return None, "tiles must look like 3x2, or 'off'"
+            out["tiles"] = str(tiles).strip()
+        if tile_overlap is not None and str(tile_overlap) != "":
+            try:
+                ov = float(tile_overlap)
+            except (ValueError, TypeError):
+                return None, "tileOverlap must be a number"
+            if not (0.0 <= ov < 0.5):
+                return None, "tileOverlap must be between 0 and 0.5"
+            out["tileOverlap"] = ov
+        return out, None
+
+    def set_room(self, in_id, room, confirm_hits=None, tiles=None, tile_overlap=None,
+                 note=None, login_id=None):
+        """Upsert one room's camera calibration. Returns (public, error)."""
+        fields, err = self.validate_room(room, confirm_hits, tiles, tile_overlap)
+        if err:
+            return None, err
+        self.ensure_index()
+        key = {"InId": in_id, "room": fields.pop("room")}
+        self.class_rooms.update_one(
+            key, {"$set": {**fields, "note": (note or "").strip()[:200] or None,
+                           "updatedBy": login_id,
+                           "updatedAt": datetime.now(timezone.utc)}},
+            upsert=True)
+        return self.resolve_room(in_id, key["room"]), None
+
+    def delete_room(self, in_id, room):
+        return self.class_rooms.delete_one({"InId": in_id, "room": room}).deleted_count > 0
+
+    def list_rooms(self, in_id):
+        return [self.resolve_room(in_id, d.get("room"))
+                for d in self.class_rooms.find({"InId": in_id}).sort("room", ASCENDING)]
+
+    def resolve_room(self, in_id, room):
+        """Effective camera settings for a room: its overrides on top of the global
+        defaults, so an unconfigured room still works."""
+        d = self.class_rooms.find_one({"InId": in_id, "room": room}) or {}
+        return {"room": room,
+                "confirmHits": int(d.get("confirmHits") or settings.class_cam_confirm_hits),
+                "tiles": d.get("tiles") or settings.class_cam_tiles,
+                "tileOverlap": float(d.get("tileOverlap")
+                                     if d.get("tileOverlap") is not None
+                                     else settings.class_cam_tile_overlap),
+                "note": d.get("note"),
+                "configured": bool(d)}
+
+    @staticmethod
     def _class_session_public(d):
         st, ct = d.get("startedAt"), d.get("closedAt")
         return {"id": str(d.get("_id", "")), "InId": d.get("InId"),
                 "CrID": d.get("CrID"), "SecID": d.get("SecID"),
                 "date": d.get("date"), "session": d.get("session"),
-                "camera": d.get("camera"), "state": d.get("state"),
+                "camera": d.get("camera"),
+                "cameras": d.get("cameras") or ([d["camera"]] if d.get("camera") else []),
+                "confirmHits": d.get("confirmHits"),
+                "state": d.get("state"),
                 "frames": d.get("frames", 0), "startedBy": d.get("startedBy"),
                 "startedAt": st.isoformat() if isinstance(st, datetime) else st,
                 "closedAt": ct.isoformat() if isinstance(ct, datetime) else ct,
@@ -1313,7 +1398,7 @@ class Store:
                 "stats": d.get("stats") or {}}
 
     def open_class_session(self, scope, cr_id, sec_id, date=None, session=None,
-                           camera=None):
+                           camera=None, cameras=None):
         """Open (or re-attach to) a sitting for a class. Returns (public, error).
 
         Re-opening is idempotent: a teacher tapping twice, or a device reconnecting,
@@ -1334,7 +1419,16 @@ class Store:
         existing = self.class_sessions.find_one(key)
         if existing:
             return self._class_session_public(existing), None
-        doc = {**key, "camera": (camera or "").strip() or None,
+        rooms = [r.strip() for r in (cameras or []) if r and r.strip()]
+        if not rooms and camera and camera.strip():
+            rooms = [camera.strip()]
+        # Snapshot the confirmation threshold from the first room's calibration.
+        # Reading it live would let an admin edit shift the bar under a sitting
+        # that is already accumulating evidence — the record must be reproducible.
+        confirm = (self.resolve_room(scope.get("InId"), rooms[0])["confirmHits"]
+                   if rooms else settings.class_cam_confirm_hits)
+        doc = {**key, "camera": rooms[0] if rooms else None, "cameras": rooms,
+               "confirmHits": confirm,
                "startedBy": scope.get("loginId"),
                "startedAt": datetime.now(timezone.utc), "closedAt": None,
                "frames": 0, "stats": {}}
@@ -1437,7 +1531,9 @@ class Store:
         if scope.get("type") == "staff" and scope.get("courses") is not None \
                 and d.get("CrID") not in scope["courses"]:
             return None, "forbidden"
-        hits = confirm_hits or settings.class_cam_confirm_hits
+        # The sitting's own snapshot wins over the current global default, so a
+        # closed session always reproduces the buckets it was closed with.
+        hits = confirm_hits or d.get("confirmHits") or settings.class_cam_confirm_hits
         roster = [s for s in self.list_students(scope=scope)
                   if self._student_course(s.get("sid")) == d.get("CrID")]
         buckets = self.bucket_observations(roster, self.list_observations(session_id), hits)

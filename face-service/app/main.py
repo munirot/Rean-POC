@@ -47,7 +47,7 @@ from .schemas import (Health, Student, RecognizeResult, PoseAnalysis,
                       Institute, LoginRequest, AuthUser, ChatRequest, AttendanceSet,
                       DisputeCreate, DisputeResolve, PeriodsUpdate, PolicyState,
                       PolicyUpsert, LeaveCreate, LeaveResolve,
-                      ClassSessionOpen, ClassDeviceToken)
+                      ClassSessionOpen, ClassDeviceToken, RoomUpsert)
 
 WEB_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "web")
 
@@ -691,13 +691,45 @@ def list_my_courses(user: dict = Depends(current_user)):
             "frameInterval": settings.class_cam_frame_interval}
 
 
+@app.get("/api/admin/class-rooms")
+def list_class_rooms(user: dict = Depends(current_user)):
+    """Per-room camera calibration for the institute."""
+    require_admin(user)
+    return {"InId": user.get("InId"), "rooms": get_store().list_rooms(user.get("InId")),
+            "defaults": {"confirmHits": settings.class_cam_confirm_hits,
+                         "tiles": settings.class_cam_tiles,
+                         "tileOverlap": settings.class_cam_tile_overlap}}
+
+
+@app.put("/api/admin/class-rooms")
+def put_class_room(req: RoomUpsert, user: dict = Depends(current_user)):
+    """Calibrate one room. Validated first: a malformed tile grid would otherwise
+    silently degrade every sitting in that room to whole-frame detection."""
+    require_admin(user)
+    room, err = get_store().set_room(
+        user.get("InId"), req.room, confirm_hits=req.confirmHits, tiles=req.tiles,
+        tile_overlap=req.tileOverlap, note=req.note, login_id=user.get("loginId"))
+    if err:
+        raise HTTPException(400, err)
+    return {"ok": True, "room": room}
+
+
+@app.delete("/api/admin/class-rooms/{room}")
+def delete_class_room(room: str, user: dict = Depends(current_user)):
+    """Drop a room's overrides so it falls back to the global defaults."""
+    require_admin(user)
+    if not get_store().delete_room(user.get("InId"), room):
+        raise HTTPException(404, "Room not found")
+    return {"ok": True}
+
+
 @app.post("/api/class-sessions")
 def open_class_session(req: ClassSessionOpen, user: dict = Depends(current_user)):
     """Open a sitting for a class. Staff only; idempotent per class/date/period."""
     require_staff(user)
     sess, err = get_store().open_class_session(
         user, req.CrID, req.SecID, date=req.date, session=req.session,
-        camera=req.camera)
+        camera=req.camera, cameras=req.cameras)
     if err == "disabled":
         raise HTTPException(409, "Whole-class camera capture is disabled "
                                  "(CLASS_CAM_ENABLED=false)")
@@ -728,9 +760,19 @@ def _ingest_frame_sync(session_id: str, data: bytes, device: dict):
     # A device may only feed a session in its OWN institute, and only while open.
     if sess.get("InId") != device.get("InId"):
         raise HTTPException(403, "Device is not permitted on this session")
+    # ...and only a session that named ITS room. A camera token is a long-lived
+    # credential on a physically reachable box, so institute membership alone is
+    # too broad: a device in one room should not be able to feed another room's
+    # class. Sessions that name no camera stay open to any device in the institute.
+    rooms = sess.get("cameras") or ([sess["camera"]] if sess.get("camera") else [])
+    if rooms and device.get("room") not in rooms:
+        raise HTTPException(403, f"Device for room {device.get('room')!r} is not "
+                                 f"assigned to this session")
     if sess.get("state") != "open":
         raise HTTPException(409, "This class session is closed")
 
+    # Per-room calibration: a deep hall may need finer tiling than a seminar room.
+    room_cfg = store.resolve_room(device.get("InId"), device.get("room"))
     engine = _engine_or_503()
     img = engine.decode(data)
     # Scope the gallery to the section's course: recognition must never search
@@ -742,8 +784,8 @@ def _ingest_frame_sync(session_id: str, data: bytes, device: dict):
         return {"ok": True, "faces": 0, "matched": 0,
                 "message": "No enrolled students in this class."}
 
-    faces = eng.detect_tiled(engine, img, settings.class_cam_tile_grid(),
-                             settings.class_cam_tile_overlap)
+    faces = eng.detect_tiled(engine, img, get_store().parse_tiles(room_cfg["tiles"]),
+                             room_cfg["tileOverlap"])
     matches = []
     for bbox, _score, face in faces:
         m = eng.best_match_vec(engine.embedding(face), mat, meta,
