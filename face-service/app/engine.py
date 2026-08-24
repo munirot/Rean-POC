@@ -18,6 +18,18 @@ class FaceEngine:
         # Imported lazily so the module can be syntax-checked without the heavy dep.
         from insightface.app import FaceAnalysis
 
+        # On an accelerated device, make onnxruntime load the CUDA/cuDNN libraries
+        # that ship as pip packages (nvidia-*-cuXX). Without this, a plain import
+        # doesn't find libcudnn.so and CUDA inference errors at the first Conv
+        # instead of running — so DEVICE=gpu "just works" with no LD_LIBRARY_PATH.
+        if settings.device in ("gpu", "cuda", "coreml", "mps", "ane"):
+            try:
+                import onnxruntime as ort
+                if hasattr(ort, "preload_dlls"):
+                    ort.preload_dlls()
+            except Exception as e:      # never let this block CPU/fallback startup
+                print(f"[engine] onnxruntime.preload_dlls() skipped: {e}")
+
         self.model_pack = settings.model_pack
         self.app = FaceAnalysis(name=self.model_pack, providers=settings.providers)
         self.app.prepare(ctx_id=settings.ctx_id, det_size=(settings.det_size, settings.det_size))

@@ -236,6 +236,11 @@ class Settings:
     enroll_yaw_span_min: float = float(_get("ENROLL_YAW_SPAN_MIN", "30"))
     # Minimum detector quality (det_score) for a capture to count.
     enroll_min_quality: float = float(_get("ENROLL_MIN_QUALITY", "0.5"))
+    # Minimum face coverage: the face box must span at least this fraction of the
+    # frame's larger visible dimension, so a distant face (small in frame) is
+    # rejected until the subject moves closer or zooms in. Measured as
+    # max(box_w/img_w, box_h/img_h) — robust to portrait vs landscape framing.
+    enroll_min_coverage: float = float(_get("ENROLL_MIN_COVERAGE", "0.40"))
     # Sign escape hatch: if "turn left"/"turn right" come out reversed on your
     # camera/model, set true to flip the yaw sign convention (no code change).
     enroll_yaw_invert: bool = _get("ENROLL_YAW_INVERT", "false").lower() == "true"

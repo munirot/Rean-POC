@@ -298,6 +298,16 @@ async def analyze_pose(file: UploadFile = File(...), source: Optional[str] = For
     return await run_in_threadpool(_pose_sync, data)
 
 
+def _face_coverage(bb: dict, img_w: int, img_h: int) -> float:
+    """How much of the frame the face box spans, as max(box_w/img_w, box_h/img_h).
+    Using the larger ratio makes it robust to portrait vs landscape framing: a
+    near face fills the frame's shorter side regardless of orientation. 0 when the
+    frame has no size."""
+    if not img_w or not img_h:
+        return 0.0
+    return max(bb["w"] / img_w, bb["h"] / img_h)
+
+
 def _pose_sync(data: bytes) -> PoseAnalysis:
     engine = _engine_or_503()
     img = engine.decode(data)
@@ -310,15 +320,19 @@ def _pose_sync(data: bytes) -> PoseAnalysis:
     pose = engine.head_pose(face)
     quality = engine.quality(face)
     bucket = settings.pose_bucket(pose["yaw"])
+    bb = engine.bbox(face)
+    coverage = _face_coverage(bb, w, h)
     live = _liveness(img, face, settings.enroll_liveness_threshold)
     return PoseAnalysis(
         image_w=w, image_h=h, face_found=True, faces=len(faces),
-        bbox=engine.bbox(face), yaw=round(pose["yaw"], 1),
+        bbox=bb, yaw=round(pose["yaw"], 1),
         pitch=round(pose["pitch"], 1), roll=round(pose["roll"], 1),
         quality=quality, pose=bucket,
         live=(live["live"] if live is not None else None),
         liveness_score=(live["score"] if live is not None else None),
         quality_ok=quality >= settings.enroll_min_quality,
+        coverage=round(coverage, 3),
+        near=coverage >= settings.enroll_min_coverage,
     )
 
 
@@ -372,6 +386,12 @@ def _enroll_sync(sid, student, blobs, poses) -> EnrollMultiResult:
         if quality < settings.enroll_min_quality:
             return fail(f"'{want}' capture too low quality ({quality}); move closer "
                         "and improve lighting.")
+        ih, iw = img.shape[:2]
+        coverage = _face_coverage(engine.bbox(face), iw, ih)
+        if coverage < settings.enroll_min_coverage:
+            return fail(f"'{want}' capture is too far away (face fills only "
+                        f"{coverage * 100:.0f}% of the frame); move closer or zoom in "
+                        "so your face fills the circle.")
         live = _liveness(img, face, settings.enroll_liveness_threshold)
         if live is not None and not live["live"]:
             return fail("Liveness check failed — enroll from a live face, not a "
@@ -415,15 +435,36 @@ def unenroll(sid: str, user: dict = Depends(current_user)):
     return {"ok": True, "sid": sid}
 
 
+def _parse_tiles(v):
+    """Parse a 'CxR' tiles request (e.g. '2x2') into (cols, rows), or None for a
+    single whole-frame pass. 'auto' uses the class-camera default grid."""
+    if not v:
+        return None
+    v = str(v).strip().lower()
+    if v in ("", "off", "none", "0", "1x1", "1"):
+        return None
+    if v == "auto":
+        return settings.class_cam_tile_grid()
+    try:
+        c, r = v.split("x")
+        c, r = int(c), int(r)
+    except (ValueError, TypeError):
+        return None
+    return (c, r) if c >= 1 and r >= 1 and (c > 1 or r > 1) else None
+
+
 @app.post("/api/recognize", response_model=RecognizeResult)
 async def recognize(file: UploadFile = File(...), threshold: Optional[float] = Form(None),
-                    source: Optional[str] = Form(None), user: dict = Depends(current_user)):
+                    source: Optional[str] = Form(None), tiles: Optional[str] = Form(None),
+                    user: dict = Depends(current_user)):
     # Any authenticated user (staff kiosk or student self-service) may recognize.
+    # `tiles` (e.g. "2x2") runs tiled detection to catch small/distant faces in a
+    # group shot — the same technique the whole-class camera uses.
     data = await file.read()
-    return await run_in_threadpool(_recognize_sync, data, threshold, source, user)
+    return await run_in_threadpool(_recognize_sync, data, threshold, source, user, tiles)
 
 
-def _recognize_sync(data: bytes, threshold, source, user) -> RecognizeResult:
+def _recognize_sync(data: bytes, threshold, source, user, tiles=None) -> RecognizeResult:
     store = get_store()
     engine = _engine_or_503()
     img = engine.decode(data)
@@ -431,18 +472,32 @@ def _recognize_sync(data: bytes, threshold, source, user) -> RecognizeResult:
     thr = settings.match_threshold if threshold is None else float(threshold)
     live_thr = settings.liveness_threshold_for(source)
 
+    grid = _parse_tiles(tiles)
+    if grid:
+        # Group / far-range: tiled detection finds small back-row faces a single
+        # whole-frame pass misses. Per-face liveness is skipped here on purpose —
+        # it's noise on a 20-60px distant face (same reasoning as the class camera).
+        dets = eng.detect_tiled(engine, img, tiles=grid, overlap=settings.class_cam_tile_overlap)
+        items = [(f, {"x": bb[0], "y": bb[1], "w": bb[2] - bb[0], "h": bb[3] - bb[1]})
+                 for (bb, _score, f) in dets]
+        do_liveness = False
+    else:
+        items = [(f, engine.bbox(f)) for f in engine.detect(img)]
+        do_liveness = True
+
     # Scope the gallery to the caller: a kiosk only matches its own institute
     # (and a course-limited staff scope, only their courses). Prevents matching —
     # and auto-marking — a student who belongs to another institute or class.
     mat, meta = store.gallery_matrix(scope=user)
     faces_out = []
-    for face in engine.detect(img):
+    for face, bbox in items:
         # Liveness first — a matched identity is only trusted if the face is live.
-        live = _liveness(img, face, live_thr)
+        live = _liveness(img, face, live_thr) if do_liveness else None
         emb = engine.embedding(face)
         m = eng.best_match_vec(emb, mat, meta, thr, margin=settings.match_margin)
         id_ok = m.get("recognized", False)
-        # Combined gate: accept only when identity matches AND liveness passes.
+        # Combined gate: accept only when identity matches AND liveness passes
+        # (liveness is None in tiled/group mode, so identity alone decides there).
         recognized = id_ok and (live["live"] if live is not None else True)
         reason = m.get("reason")
         if live is not None and id_ok and not live["live"]:
@@ -450,7 +505,7 @@ def _recognize_sync(data: bytes, threshold, source, user) -> RecognizeResult:
             # genuine spoof signal from "we simply couldn't verify this frame".
             reason = "spoof_suspected" if live.get("assessed", True) else "liveness_unknown"
         faces_out.append({
-            "bbox": engine.bbox(face),
+            "bbox": bbox,
             "quality": engine.quality(face),
             "recognized": recognized,
             "sid": m.get("sid"),

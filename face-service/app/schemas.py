@@ -49,6 +49,8 @@ class PoseAnalysis(BaseModel):
     live: Optional[bool] = None
     liveness_score: Optional[float] = None
     quality_ok: bool = False
+    coverage: Optional[float] = None    # face box span as a fraction of the frame
+    near: bool = False                  # coverage >= configured minimum (close enough)
     message: Optional[str] = None
 
 

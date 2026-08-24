@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { Card, Badge } from 'react-bootstrap'
+import { Card, Badge, Modal } from 'react-bootstrap'
 import PageHeader from '../components/PageHeader'
 import Button from '../components/Button'
 import { api } from '../api'
@@ -223,18 +223,27 @@ export default function StudentDetail() {
             Look at the camera and slowly turn your head left, center, and right to complete enrollment.
           </p>
 
-          {enrolling ? (
-            <GuidedEnroll sid={sid} onDone={onEnrolled} onCancel={() => setEnrolling(false)} />
-          ) : (
-            <div className="d-flex flex-wrap gap-2">
-              <Button variant="primary" icon="videocam" disabled={busy} onClick={() => setEnrolling(true)}>
-                {s.enrolled ? 'Re-enroll (guided)' : 'Start guided enrollment'}
-              </Button>
-              {s.enrolled && <Button variant="danger" icon="delete" disabled={busy} onClick={remove}>Remove profile</Button>}
-            </div>
-          )}
+          <div className="d-flex flex-wrap gap-2">
+            <Button variant="primary" icon="videocam" disabled={busy} onClick={() => setEnrolling(true)}>
+              {s.enrolled ? 'Re-enroll (guided)' : 'Start guided enrollment'}
+            </Button>
+            {s.enrolled && <Button variant="danger" icon="delete" disabled={busy} onClick={remove}>Remove profile</Button>}
+          </div>
         </Card.Body>
       </Card>
+
+      {/* Guided enrollment runs in a focused dark modal (FaceID-style). The panel
+          renders its own top bar + close, so no default Modal.Header. backdrop
+          "static" avoids closing mid-capture by a stray outside click. */}
+      <Modal show={enrolling} onHide={() => setEnrolling(false)} centered backdrop="static"
+        contentClassName="enroll-modal">
+        <Modal.Body className="p-0">
+          {enrolling && (
+            <GuidedEnroll sid={sid} name={s.name} autoStart
+              onDone={onEnrolled} onCancel={() => setEnrolling(false)} />
+          )}
+        </Modal.Body>
+      </Modal>
       {toast}
     </>
   )

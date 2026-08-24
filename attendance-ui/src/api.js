@@ -1,5 +1,5 @@
 // Thin client for the Python face-service. In dev, Vite proxies /api -> :8000.
-import { getSession } from './auth'
+import { getSession, clearSession } from './auth'
 
 const BASE = import.meta.env.VITE_API_BASE || ''
 
@@ -10,6 +10,12 @@ async function j(url, opts = {}) {
   if (token) headers.Authorization = `Bearer ${token}`
   const r = await fetch(BASE + url, { ...opts, headers })
   if (!r.ok) {
+    // An expired/invalid session (401 while we DID send a token) otherwise shows
+    // as silently-empty pages. Clear it and bounce to login instead of guessing.
+    if (r.status === 401 && token && !url.includes('/auth/login')) {
+      clearSession()
+      if (!location.pathname.startsWith('/login')) location.assign('/login')
+    }
     let msg = `HTTP ${r.status}`
     try { const e = await r.json(); msg = e.detail || e.message || msg } catch {}
     throw new Error(msg)
@@ -64,11 +70,13 @@ export const api = {
   unenroll: (sid) => j(`/api/students/${sid}/enroll`, { method: 'DELETE' }),
   resetProfiles: () => j('/api/students/reset', { method: 'POST' }),
 
-  // recognition
-  recognize: (blob, threshold) => {
+  // recognition. opts.tiles (e.g. "2x2") runs tiled detection for far/group shots.
+  recognize: (blob, threshold, opts = {}) => {
     const fd = new FormData()
     fd.append('file', blob, 'frame.jpg')
     if (threshold != null) fd.append('threshold', threshold)
+    if (opts.tiles) fd.append('tiles', opts.tiles)
+    if (opts.source) fd.append('source', opts.source)
     return j('/api/recognize', { method: 'POST', body: fd })
   },
 

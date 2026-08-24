@@ -3,6 +3,7 @@ import { Row, Col, Card, Form, Badge, ButtonGroup, Table, Alert } from 'react-bo
 import PageHeader from '../components/PageHeader'
 import Button from '../components/Button'
 import FaceStage from '../components/FaceStage'
+import ZoomControl from '../components/ZoomControl'
 import MatIcon from '../components/MatIcon'
 import { api } from '../api'
 import { fmtTime, todayStr } from '../utils/time'
@@ -11,21 +12,32 @@ import { useFaceDetection } from '../hooks/useFaceDetection'
 import { useToast } from '../components/Layout'
 import { getSession } from '../auth'
 
-// Auto-mark confirmation gate. Recognition runs per 500ms frame, and a single
-// mislabeled frame used to mark the wrong student immediately. Instead, the same
-// student must be recognized in at least CONFIRM_MIN_HITS separate cycles within
-// CONFIRM_WINDOW_MS before we auto-mark — genuine presence still confirms in ~1s,
-// but a lone stray frame no longer marks anyone.
-const CONFIRM_MIN_HITS = 2
-const CONFIRM_WINDOW_MS = 2500
+// Snapshot recognition. Rather than streaming frames continuously, we detect a
+// face locally at a LOW rate and, once it's steady and close enough, FREEZE the
+// frame and send exactly ONE frame to the server. This cuts local CPU (a few
+// detections/sec, not 30fps) and server load (one recognition per person, not
+// ~8/sec of streaming), and reads as a clear "snapshot" to the user.
+//
+//   scan  → a big-enough face steady for STABLE_HITS low-rate checks
+//   shoot → pause the video (freeze), send one /api/recognize
+//   lock  → a recognized face stays plotted (tracked locally) with NO further
+//           recognition while it remains in view — we already know who it is
+//   rearm → once the face leaves, forget it and be ready for the next person
+// (an unrecognized face isn't locked — it's retried after UNKNOWN_RETRY_MS.)
+const STABLE_HITS = 2            // steady low-rate detections before we shoot
+const MIN_FACE_FRAC = 0.16       // face box width / frame width worth recognizing
+const UNKNOWN_RETRY_MS = 1500    // after an unknown result, wait this long before re-trying the same face
+// Group mode runs a tiled full-frame pass in ~100ms on GPU, so we can refresh fast
+// enough that far faces (which only the server sees) track smoothly, not just the
+// near faces the local detector handles. The heartbeat is the slower idle probe.
+const GROUP_REFRESH_MS = 200     // group: re-recognize this often while faces are present
+const GROUP_HEARTBEAT_MS = 700   // group: idle sweep to catch new/far arrivals
+const SCAN_POLL_MS = 200         // how often the scan loop wakes
+const CROP_MARGIN = 0.4          // padding around the face when we crop the shot
 
-// Live recognition cadence + crop. We only send a frame when the in-browser
-// detector sees a face, and we send just the padded region around the face(s)
-// rather than the whole frame — idle scenes cost the server nothing, and an
-// occupied scene uploads/decodes far less. Padding keeps enough context around
-// the face for the server's detector, alignment, and liveness cues.
-const RECOGNIZE_INTERVAL_MS = 350
-const CROP_MARGIN = 0.4
+// Scan-status banner styling by state.
+const SCAN_VARIANT = { aim: 'alert-secondary', checking: 'alert-primary', ok: 'alert-success', unknown: 'alert-warning' }
+const SCAN_ICON = { aim: 'center_focus_weak', checking: 'hourglass_top', ok: 'check_circle', unknown: 'help' }
 
 // "08:20" + 10 -> "08:30". Used only to show when the late window shuts.
 function addMinutes(hhmm, mins) {
@@ -40,6 +52,9 @@ export default function TakeAttendance() {
   const isStudent = session0?.type === 'student'
   const mySid = session0?.sid
   const [source, setSource] = useState('face') // 'face' | 'manual'
+  // Face capture mode: 'individual' = one person per snapshot (kiosk / self check-in);
+  // 'group' = recognize everyone in frame each pass and mark all (staff only).
+  const [scanMode, setScanMode] = useState('individual')
   const [session, setSession] = useState('Morning')
   // null until /api/health reports the server's MATCH_THRESHOLD. While it is
   // null we send no threshold at all, so the server's configured value applies;
@@ -61,13 +76,29 @@ export default function TakeAttendance() {
   const [cls, setCls] = useState('')
 
   const cam = useCamera()
-  const det = useFaceDetection()            // in-browser real-time face boxes
+  // short-range in-browser detector (near faces, tracked locally at ~10fps; FaceStage
+  // interpolates to 60fps). Far faces in Group mode are found by the server pass.
+  const det = useFaceDetection({ intervalMs: 100 })
   const labelsRef = useRef([])              // backend identity, normalized, for the overlay
   const busy = useRef(false)
   const loopRef = useRef(null)
   const runningRef = useRef(false)   // live-detection loop flag (avoids stale cam.active)
   const markedSids = useRef(new Set())
-  const votesRef = useRef(new Map())   // sid -> recent hit timestamps (N-of-M gate)
+  // Snapshot state machine: 'scan' → 'shoot' (frozen, recognizing) → back to 'scan',
+  // where a recognized face is LOCKED and just re-plotted (no re-recognition) until
+  // it leaves the frame.
+  const phaseRef = useRef('scan')
+  const stableRef = useRef(0)          // consecutive steady detections while scanning
+  const rearmRef = useRef(true)        // ready to take a shot? (false once locked / cooling down)
+  const lockRef = useRef(null)         // identity stuck to the on-screen face: {sid,name,accuracy,recognized}
+  const retryAtRef = useRef(0)         // earliest time to retry after an unknown result
+  const pendingIdentityRef = useRef(null)   // identity awaiting a student's liveness turn
+  // Group mode: recognize everyone in frame on a cadence, marking newly-seen students.
+  const scanModeRef = useRef('individual')
+  const lastPassRef = useRef(0)        // when the last group recognition ran
+  const lastFoundRef = useRef(0)       // faces the last group pass found (keeps fast cadence for far faces)
+  const scanKeyRef = useRef('')        // dedupes scan-status re-renders
+  const [scanUI, setScanUI] = useState(null)  // {kind:'aim'|'checking'|'ok'|'unknown', text}
   // Active liveness challenge for unsupervised student self-check-in. challengeRef
   // holds {dir, sawCenter} while a turn is being verified; challengeDoneRef marks
   // it passed this session; challengeReq is whether the server requires it.
@@ -84,7 +115,6 @@ export default function TakeAttendance() {
   // of only what was marked in this page session.
   useEffect(() => {
     sessionRef.current = session
-    votesRef.current.clear()   // votes are per-session; don't carry across a switch
     challengeRef.current = null; challengeDoneRef.current = false; setChallengeUI(null)
     api.roster({ date: todayStr(), session }).then((r) => {
       const present = (r.students || []).filter((x) => x.checkedIn)
@@ -110,6 +140,13 @@ export default function TakeAttendance() {
       .catch(() => { challengeReq.current = isStudent })   // offline: default on for students
   }, [])
   useEffect(() => { autoRef.current = autoMark }, [autoMark])
+  // Switching individual⇄group mid-scan: reset per-mode state so it starts clean.
+  useEffect(() => {
+    scanModeRef.current = scanMode
+    lockRef.current = null; rearmRef.current = true; stableRef.current = 0; retryAtRef.current = 0
+    lastPassRef.current = 0; lastFoundRef.current = 0; phaseRef.current = 'scan'
+    labelsRef.current = []; challengeRef.current = null; setChallengeUI(null); ui(null)
+  }, [scanMode])
 
   // Poll the capture policy: the window state changes with the clock (open ->
   // grace -> closed), so a page left open must not keep claiming it's open.
@@ -178,21 +215,22 @@ export default function TakeAttendance() {
       if (r.record) setMarked((m) => (m.some((x) => x.sid === sid) ? m : [{ ...r.record, when: new Date() }, ...m]))
     } catch (e) { markedSids.current.delete(sid); setToast(e.message) }
   }
-  async function recognizeBlob(blob, region) {
-    // Omit the threshold unless it was overridden, so MATCH_THRESHOLD applies.
-    const res = await api.recognize(blob, threshTouched.current ? threshRef.current : null)
-    // A request already in flight when the camera is stopped resolves ~1-2s later;
-    // dropping it here stops a stale box/label from flashing back after stop.
-    if (!runningRef.current) return res
-    // The server's bbox is in the coordinates of the CROP we sent. Map it back into
-    // full-frame normalized coords so the overlay can attach the identity to the
-    // real-time local box by centre. For a full-frame send (region covers the whole
-    // video) this reduces to a plain normalize, i.e. the previous behaviour.
+  // Set the scan-status banner, de-duped so we don't re-render every loop tick.
+  function ui(kind, text) {
+    const key = kind ? `${kind}|${text}` : ''
+    if (scanKeyRef.current === key) return
+    scanKeyRef.current = key
+    setScanUI(kind ? { kind, text } : null)
+  }
+
+  // Map the server's crop-relative face boxes into full-frame normalized coords so
+  // FaceStage can draw the identity on the (frozen) frame.
+  function mapLabels(res, region) {
     const iw = res.image_w || region.w, ih = res.image_h || region.h
     const sx = region.w / iw, sy = region.h / ih          // sent-crop px -> video px
     const vw = region.videoW, vh = region.videoH
     const now = performance.now()
-    labelsRef.current = res.faces.map((f) => {
+    labelsRef.current = (res.faces || []).map((f) => {
       const fx = region.x + f.bbox.x * sx, fy = region.y + f.bbox.y * sy
       const fw = f.bbox.w * sx, fh = f.bbox.h * sy
       return {
@@ -201,57 +239,118 @@ export default function TakeAttendance() {
         recognized: f.recognized, name: f.name, accuracy: f.accuracy, sid: f.sid, ts: now,
       }
     })
-    if (autoRef.current) {
-      const votes = votesRef.current
-      for (const f of res.faces) {
-        if (!f.recognized || !f.sid) continue
-        // students self-check-in: only mark their own face
-        if (isStudent && f.sid !== mySid) continue
-        // Record this cycle's confident recognition as a vote, dropping any that
-        // fell outside the window; auto-mark only once the same face has cleared
-        // in CONFIRM_MIN_HITS separate recent cycles.
-        const hits = (votes.get(f.sid) || []).filter((t) => now - t < CONFIRM_WINDOW_MS)
-        hits.push(now)
-        votes.set(f.sid, hits)
-        if (hits.length >= CONFIRM_MIN_HITS) {
-          // Student self-check-in: once identity is confirmed, require a live
-          // head-turn before marking. Everyone else (staff kiosk) marks directly.
-          if (isStudent && challengeReq.current && !challengeDoneRef.current) {
-            if (!challengeRef.current) startChallenge()
-          } else {
-            doMark(f.sid, { source: 'face', similarity: f.similarity })
-          }
-        }
-      }
-      // Prune faces not seen recently so the vote map can't grow unbounded.
-      for (const [sid, hits] of votes) {
-        const keep = hits.filter((t) => now - t < CONFIRM_WINDOW_MS)
-        if (keep.length) votes.set(sid, keep); else votes.delete(sid)
-      }
-    }
-    return res
   }
-  // The region to recognize this cycle, in video pixels. Returns null to SKIP the
-  // call entirely (no face in view). Uses the in-browser detector's boxes to crop
-  // to just the face(s); if that detector is unavailable (CDN blocked / erroring)
-  // we fall back to the full frame so recognition still works.
-  function recognitionRegion(v) {
-    const vw = v.videoWidth, vh = v.videoHeight
+
+  // Largest local detection box, or null when no face is in view.
+  function biggestBox() {
     const boxes = det.boxesRef.current || []
-    if (!boxes.length) {
-      return det.status === 'error'
-        ? { x: 0, y: 0, w: vw, h: vh, videoW: vw, videoH: vh, full: true }
-        : null   // idle, no face — send nothing
-    }
-    let x1 = Infinity, y1 = Infinity, x2 = -Infinity, y2 = -Infinity
-    for (const b of boxes) {
-      x1 = Math.min(x1, b.x); y1 = Math.min(y1, b.y)
-      x2 = Math.max(x2, b.x + b.w); y2 = Math.max(y2, b.y + b.h)
-    }
-    const padX = (x2 - x1) * CROP_MARGIN, padY = (y2 - y1) * CROP_MARGIN
-    x1 = Math.max(0, x1 - padX); y1 = Math.max(0, y1 - padY)
-    x2 = Math.min(vw, x2 + padX); y2 = Math.min(vh, y2 + padY)
+    if (!boxes.length) return null
+    return boxes.reduce((a, b) => (b.w * b.h > a.w * a.h ? b : a))
+  }
+
+  // A padded crop region around ONE box (individual mode recognizes just the nearest
+  // face, so the crop isn't diluted by other people spread across the frame).
+  function regionForBox(box, v) {
+    const vw = v.videoWidth, vh = v.videoHeight
+    const padX = box.w * CROP_MARGIN, padY = box.h * CROP_MARGIN
+    const x1 = Math.max(0, box.x - padX), y1 = Math.max(0, box.y - padY)
+    const x2 = Math.min(vw, box.x + box.w + padX), y2 = Math.min(vh, box.y + box.h + padY)
     return { x: x1, y: y1, w: x2 - x1, h: y2 - y1, videoW: vw, videoH: vh, full: false }
+  }
+
+  // The recognized face to act on: a student only ever their own; a staff kiosk
+  // takes the most confident recognized face (falling back to the largest).
+  function pickFace(res) {
+    const faces = res.faces || []
+    if (isStudent) return faces.find((f) => f.recognized && f.sid === mySid) || null
+    const rec = faces.filter((f) => f.recognized && f.sid)
+    if (rec.length) return rec.reduce((a, b) => (b.accuracy > a.accuracy ? b : a))
+    return faces[0] || null
+  }
+
+  function resumeScan() { phaseRef.current = 'scan'; stableRef.current = 0; try { cam.videoRef.current?.play() } catch { /* noop */ } }
+
+  // Keep the known identity drawn on the face while it stays in view, tracking the
+  // live detection box — no server round-trip. This is the "just plot" path.
+  function plotLock(box, v) {
+    const lock = lockRef.current
+    if (!lock) return
+    const W = v.videoWidth, H = v.videoHeight
+    labelsRef.current = [{
+      nx: box.x / W, ny: box.y / H, nw: box.w / W, nh: box.h / H,
+      ncx: (box.x + box.w / 2) / W, ncy: (box.y + box.h / 2) / H,
+      recognized: lock.recognized, name: lock.name, accuracy: lock.accuracy, ts: performance.now(),
+    }]
+  }
+
+  // Freeze the current frame and send exactly ONE frame for recognition — of the
+  // NEAREST face only.
+  async function doSnapshot(v) {
+    phaseRef.current = 'shoot'
+    ui('checking', 'Hold still — checking…')
+    try { v.pause() } catch { /* noop */ }           // freeze the displayed frame
+    const box = biggestBox()
+    const region = box ? regionForBox(box, v)
+      : { x: 0, y: 0, w: v.videoWidth, h: v.videoHeight, videoW: v.videoWidth, videoH: v.videoHeight, full: true }
+    const blob = await cam.grabRegion(region, region.full ? 640 : 480)
+    if (!blob) { rearmRef.current = true; resumeScan(); ui(null); return }
+    // Omit the threshold unless overridden, so the server's MATCH_THRESHOLD applies.
+    const res = await api.recognize(blob, threshTouched.current ? threshRef.current : null)
+    if (!runningRef.current) return
+    try { v.play() } catch { /* noop */ }            // unfreeze — from here we track locally
+    mapLabels(res, region)
+    const face = pickFace(res)
+    phaseRef.current = 'scan'; rearmRef.current = false
+    if (face && face.recognized && face.sid) {
+      if (isStudent && challengeReq.current && !challengeDoneRef.current) {
+        // Liveness needs live motion, so run the head-turn challenge before locking.
+        pendingIdentityRef.current = { sid: face.sid, name: face.name, accuracy: face.accuracy, recognized: true }
+        ui('ok', `${face.name} — confirm you're live`)
+        startChallenge()
+        return
+      }
+      if (autoRef.current) await doMark(face.sid, { source: 'face', similarity: face.similarity })
+      // Lock the identity to this face; the loop just re-plots it until they leave.
+      lockRef.current = { sid: face.sid, name: face.name, accuracy: face.accuracy, recognized: true }
+      ui('ok', autoRef.current ? `${face.name} · marked ✓` : `${face.name} · ${face.accuracy}%`)
+    } else {
+      const sawFace = (res.faces || []).length > 0
+      // No identity to lock — retry the same face after a short cooldown.
+      lockRef.current = null; retryAtRef.current = performance.now() + UNKNOWN_RETRY_MS
+      ui('unknown', sawFace ? (isStudent ? "That's not a match — try again" : 'Not recognized — try again')
+        : 'No face — step closer')
+    }
+  }
+
+  // Group mode: recognize EVERY face in frame (one call covers them all — the region
+  // is the union of all detected boxes), plot each with its name, and mark every
+  // recognized student we haven't marked yet. No freeze, no single lock — it re-runs
+  // on a cadence and whenever the number of faces changes, so a whole group can walk
+  // past the camera and each person is marked once.
+  async function doGroupPass(v) {
+    lastPassRef.current = performance.now()
+    // Send the WHOLE frame at high resolution and let the server's SCRFD do TILED
+    // detection — so far / back-row faces the short-range in-browser detector can't
+    // see are still found. (The frontend BlazeFace is near-range; the server isn't.)
+    const region = { x: 0, y: 0, w: v.videoWidth, h: v.videoHeight, videoW: v.videoWidth, videoH: v.videoHeight, full: true }
+    const blob = await cam.grabRegion(region, 1280)
+    if (!blob) return
+    const res = await api.recognize(blob, threshTouched.current ? threshRef.current : null, { tiles: '2x2' })
+    if (!runningRef.current) return
+    mapLabels(res, region)                            // draw a box + name on every face
+    const faces = res.faces || []
+    lastFoundRef.current = faces.length               // keep fast cadence while faces are present
+    const recognized = faces.filter((f) => f.recognized && f.sid)
+    let marked = 0
+    for (const f of recognized) {
+      if (markedSids.current.has(f.sid)) continue
+      if (autoRef.current) { await doMark(f.sid, { source: 'face', similarity: f.similarity }); marked++ }
+    }
+    if (!faces.length) ui(null)
+    else ui(recognized.length ? 'ok' : 'aim',
+      recognized.length
+        ? `${recognized.length} recognized${marked ? ` · +${marked} marked ✓` : ''} · ${faces.length} in view`
+        : `${faces.length} face(s) — no match yet`)
   }
 
   // Begin the active challenge: pick a random turn direction and prompt for a
@@ -289,6 +388,11 @@ export default function TakeAttendance() {
       setChallengeUI(null)
       doMark(mySid, { source: 'face' })
       setToast('Liveness confirmed — checked in ✓')
+      // Lock the (now verified) identity so it keeps plotting until they leave.
+      lockRef.current = pendingIdentityRef.current || { sid: mySid, recognized: true }
+      pendingIdentityRef.current = null
+      ui('ok', `${lockRef.current.name ? lockRef.current.name + ' · ' : ''}checked in ✓`)
+      rearmRef.current = false
     } else {
       setChallengeUI({ dir: ch.dir, text: `Turn your head ${ch.dir}` })
     }
@@ -296,31 +400,52 @@ export default function TakeAttendance() {
 
   function startLive() {
     runningRef.current = true
-    votesRef.current.clear()
-    challengeRef.current = null; challengeDoneRef.current = false; setChallengeUI(null)
+    phaseRef.current = 'scan'; stableRef.current = 0; rearmRef.current = true
+    lockRef.current = null; retryAtRef.current = 0; pendingIdentityRef.current = null
+    lastPassRef.current = 0; lastFoundRef.current = 0
+    challengeRef.current = null; challengeDoneRef.current = false; setChallengeUI(null); ui(null)
     let last = 0
-    // The box tracks the face locally (in-browser), so recognition only needs to
-    // run often enough for fresh identity + prompt auto-marking, not for smoothness.
     const step = async (t) => {
       if (!runningRef.current) return   // ref, not stale cam.active
       const v = cam.videoRef.current
-      if (t - last > RECOGNIZE_INTERVAL_MS && !busy.current && v?.readyState >= 2 && v.videoWidth) {
-        last = t
-        busy.current = true
+      const ready = v?.readyState >= 2 && v.videoWidth
+      if (ready && t - last > SCAN_POLL_MS && !busy.current) {
+        last = t; busy.current = true
         try {
           if (challengeRef.current) {
-            await challengeFrame()          // verifying a live head-turn
-          } else {
-            const region = recognitionRegion(v)
-            if (region === null) {
-              // No one in view — drop stale labels so a name doesn't linger.
+            await challengeFrame()                 // verifying a live head-turn
+          } else if (scanModeRef.current === 'group') {
+            // Group: re-recognize the whole frame on a cadence. When the in-browser
+            // detector sees someone we refresh quickly; even when it sees nobody we
+            // still sweep on a slower heartbeat, because far faces it can't see may
+            // be there for the server's tiled detector to find.
+            // Refresh fast while faces are present (near ones the local detector sees,
+            // OR far ones the last server pass found); fall back to the idle heartbeat.
+            const active = (det.boxesRef.current || []).length > 0 || lastFoundRef.current > 0
+            const due = performance.now() - lastPassRef.current > (active ? GROUP_REFRESH_MS : GROUP_HEARTBEAT_MS)
+            if (due) await doGroupPass(v)
+          } else if (phaseRef.current === 'scan') {
+            const box = biggestBox()
+            // boxes are in processed-frame coords, so this fraction already reflects zoom
+            const frac = box ? box.w / v.videoWidth : 0
+            if (!box || frac < MIN_FACE_FRAC) {
+              // Face left the frame — forget its identity and rearm for the next person.
+              stableRef.current = 0; rearmRef.current = true; lockRef.current = null
               if (labelsRef.current.length) labelsRef.current = []
+              ui(null)
+            } else if (lockRef.current) {
+              // Same face still here — we already know it, so just keep plotting it.
+              plotLock(box, v)
             } else {
-              const b = await cam.grabRegion(region, region.full ? 640 : 480)
-              if (b) await recognizeBlob(b, region)
+              // Unknown-result cooldown expired? allow another attempt on this face.
+              if (!rearmRef.current && performance.now() >= retryAtRef.current) { rearmRef.current = true; stableRef.current = 0 }
+              stableRef.current += 1
+              if (rearmRef.current && stableRef.current >= STABLE_HITS) await doSnapshot(v)
+              else if (rearmRef.current) ui('aim', 'Face detected — hold still')
             }
           }
-        } catch {} finally { busy.current = false }
+        } catch (e) { console.error('[attendance] scan step failed', e); rearmRef.current = true; resumeScan() }
+        finally { busy.current = false }
       }
       loopRef.current = requestAnimationFrame(step)
     }
@@ -328,12 +453,17 @@ export default function TakeAttendance() {
   }
   async function onStart() {
     const ok = await cam.start(); if (!ok) return setToast(cam.error)
-    det.start(cam.videoRef)          // begin real-time in-browser detection (loads on first use)
+    // Detect on the PROCESSED frame (zoom crop) so a distant/zoomed face is large
+    // enough for the local detector — not just bigger on screen.
+    det.start(cam.videoRef, cam.sourceRect)
     startLive()
   }
   function onStop() {
     runningRef.current = false; cancelAnimationFrame(loopRef.current)
-    det.stop(); labelsRef.current = []; votesRef.current.clear()
+    det.stop(); labelsRef.current = []
+    phaseRef.current = 'scan'; stableRef.current = 0; rearmRef.current = true
+    lockRef.current = null; retryAtRef.current = 0; pendingIdentityRef.current = null
+    lastPassRef.current = 0; lastFoundRef.current = 0; ui(null)
     challengeRef.current = null; setChallengeUI(null); cam.stop()
   }
   useEffect(() => () => { runningRef.current = false; cancelAnimationFrame(loopRef.current); det.stop() }, [])   // eslint-disable-line react-hooks/exhaustive-deps
@@ -354,16 +484,29 @@ export default function TakeAttendance() {
           <Card>
             <Card.Body>
               <Row className="g-2 mb-3 align-items-end">
-                {!isStudent && <Col xs={12} className="mb-1">
-                  <Form.Label className="fs-2 text-secondary fw-semibold mb-1">Source</Form.Label>
+                {!isStudent && <Col xs={12} className="mb-1 d-flex flex-wrap gap-3 align-items-end">
                   <div>
-                    <ButtonGroup size="sm">
-                      <Button icon="camera" variant={source === 'face' ? 'primary' : 'outline-primary'}
-                        onClick={() => switchSource('face')}>Face</Button>
-                      <Button icon="check" variant={source === 'manual' ? 'primary' : 'outline-primary'}
-                        onClick={() => switchSource('manual')}>Manual</Button>
-                    </ButtonGroup>
+                    <Form.Label className="fs-2 text-secondary fw-semibold mb-1">Source</Form.Label>
+                    <div>
+                      <ButtonGroup size="sm">
+                        <Button icon="camera" variant={source === 'face' ? 'primary' : 'outline-primary'}
+                          onClick={() => switchSource('face')}>Face</Button>
+                        <Button icon="check" variant={source === 'manual' ? 'primary' : 'outline-primary'}
+                          onClick={() => switchSource('manual')}>Manual</Button>
+                      </ButtonGroup>
+                    </div>
                   </div>
+                  {source === 'face' && <div>
+                    <Form.Label className="fs-2 text-secondary fw-semibold mb-1">Mode</Form.Label>
+                    <div>
+                      <ButtonGroup size="sm">
+                        <Button icon="person" variant={scanMode === 'individual' ? 'primary' : 'outline-primary'}
+                          onClick={() => setScanMode('individual')}>Individual</Button>
+                        <Button icon="groups" variant={scanMode === 'group' ? 'primary' : 'outline-primary'}
+                          onClick={() => setScanMode('group')}>Group</Button>
+                      </ButtonGroup>
+                    </div>
+                  </div>}
                 </Col>}
                 <Col xs={5} sm={4}>
                   <Form.Label className="fs-2 text-secondary fw-semibold mb-1">Session</Form.Label>
@@ -408,23 +551,30 @@ export default function TakeAttendance() {
                 session={session} />
 
               {source === 'face' ? <>
-                <FaceStage videoRef={cam.active ? cam.videoRef : null}
-                  boxesRef={det.boxesRef} labelsRef={labelsRef}
-                  placeholder="Start the camera to recognize students and mark attendance automatically." />
+                <div style={{ position: 'relative' }}>
+                  <FaceStage videoRef={cam.active ? cam.videoRef : null} sourceRect={cam.sourceRect}
+                    boxesRef={det.boxesRef} labelsRef={labelsRef} useServerBoxes={scanMode === 'group'}
+                    singleBox={scanMode === 'individual'}
+                    placeholder="Start the camera to recognize students and mark attendance automatically." />
+                  {cam.active && cam.zoomCaps && <ZoomControl cam={cam} className="cam-zoom" />}
+                </div>
 
-                {challengeUI && (
+                {challengeUI ? (
                   <div className="alert alert-primary d-flex align-items-center gap-2 mt-2 mb-0 py-2">
                     <MatIcon name={challengeUI.dir === 'left' ? 'arrow_back' : 'arrow_forward'} />
                     <span className="fw-semibold">Liveness check: {challengeUI.text}</span>
                   </div>
-                )}
+                ) : scanUI ? (
+                  <div className={`alert d-flex align-items-center gap-2 mt-2 mb-0 py-2 ${SCAN_VARIANT[scanUI.kind] || 'alert-secondary'}`}>
+                    <MatIcon name={SCAN_ICON[scanUI.kind] || 'center_focus_weak'} />
+                    <span className="fw-semibold">{scanUI.text}</span>
+                  </div>
+                ) : null}
 
-                {cam.active && (
+                {cam.active && !challengeUI && !scanUI && (
                   <div className="fs-2 text-secondary mt-2">
-                    {det.status === 'ready' ? '● Camera on — recognizing students'
-                      : det.status === 'loading' ? '○ Getting the camera ready…'
-                      : det.status === 'error' ? '● Camera on — recognizing students'
-                      : ''}
+                    {det.status === 'loading' ? '○ Getting the camera ready…'
+                      : '● Camera on — look at the camera to check in'}
                   </div>
                 )}
 

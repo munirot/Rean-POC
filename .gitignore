@@ -3,3 +3,5 @@ graphify-out
 sample-data/seed_faces
 __pycache__/
 *.pyc.DS_Store
+.mongo-data/
+.mongo-log/
